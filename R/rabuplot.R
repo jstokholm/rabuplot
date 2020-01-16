@@ -163,11 +163,11 @@ rabuplot <- function(phylo_ob,
   if(!is.null(Strata)) subset[,Strata] <- as.factor(subset[,Strata])
   if(!is.null(bar_wrap)){
     subset$wrap <-  as.factor(subset[,bar_wrap])
-    molten <- melt(subset[,c("ID",paste(bacteria),"predictor2",Strata,"wrap")], )
+    molten <- reshape2::melt(subset[,c("ID",paste(bacteria),"predictor2",Strata,"wrap")], )
   }
   if(is.null(bar_wrap)){
     #if (!is.null(group)) subset[,group] <-  as.factor(subset[,group])
-    molten <- melt(subset[,c("ID",paste(bacteria),"predictor2",Strata)], )
+    molten <- reshape2::melt(subset[,c("ID",paste(bacteria),"predictor2",Strata)], )
   }
   if(!is.null(color_by)){
     molten[molten$variable != paste("Other",type),"colvar"] <- molten %>% dplyr::filter(variable != paste("Other",type)) %>% .[,"variable"] %>% match(tax[,type]) %>% tax[.,"phylum"] %>% as.character
