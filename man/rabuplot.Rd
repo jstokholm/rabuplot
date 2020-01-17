@@ -51,9 +51,14 @@ rabuplot(
   p_adjust = FALSE
 )
 }
+\arguments{
+\item{phylo_ob}{Phyloseq object with metadata in sample_data}
+
+\item{predictor}{Predictor for stastics/plotting}
+}
 \value{
-Plot
+A ggplot
 }
 \description{
-For creating plots
+For creating nice microbiome plots
 }

@@ -1,14 +1,13 @@
-#'Relative Abundance Plot
+#' Relative Abundance Plot
 #'
-#'For creating plots
+#' For creating nice microbiome plots
 #'
-#'
-#'@import ggplot2 phyloseq metagenomeSeq dplyr RColorBrewer
-#'
-#'@export
-#'
-#'@return Plot
-#'
+#' @param phylo_ob Phyloseq object with metadata in sample_data
+#' @param predictor Predictor for stastics/plotting
+#' @import ggplot2 phyloseq metagenomeSeq dplyr RColorBrewer
+#' @return A ggplot
+
+#' @export
 
 rabuplot <- function(phylo_ob,
                                 predictor,
