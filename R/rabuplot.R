@@ -3,7 +3,7 @@
 #'For creating plots
 #'
 #'
-#'@import ggplot2 phyloseq metagenomeSeq reshape2 dplyr RColorBrewer
+#'@import ggplot2 phyloseq metagenomeSeq dplyr RColorBrewer
 #'
 #'@export
 #'
