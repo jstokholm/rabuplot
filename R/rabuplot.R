@@ -13,9 +13,9 @@
 rabuplot <- function(phylo_ob,
                                 predictor,
                                 type="genus",
-                                xlabs = "Proportional abundance (%)",
+                                xlabs = "Relative abundance (%)",
                                 ylabs = "Average relative abundance",
-                                main = "Proportional abundance plot",
+                                main = "Relative abundance plot",
                                 violin=TRUE,
                                 violin_scale = "width",
                                 legend_title=predictor,
@@ -163,11 +163,16 @@ rabuplot <- function(phylo_ob,
   if(!is.null(Strata)) subset[,Strata] <- as.factor(subset[,Strata])
   if(!is.null(bar_wrap)){
     subset$wrap <-  as.factor(subset[,bar_wrap])
-    molten <- reshape2::melt(subset[,c("ID",paste(bacteria),"predictor2",Strata,"wrap")], )
+    if(!is.null(Strata))
+      molten <- subset[,c("ID",paste(bacteria),"predictor2",Strata,"wrap")] %>% gather(variable, value,-"predictor2",-"ID",-Strata,-"wrap")
+    else
+      molten <- subset[,c("ID",paste(bacteria),"predictor2","wrap")] %>% gather(variable, value,-"predictor2",-"ID",-"wrap")
   }
   if(is.null(bar_wrap)){
-    #if (!is.null(group)) subset[,group] <-  as.factor(subset[,group])
-    molten <- reshape2::melt(subset[,c("ID",paste(bacteria),"predictor2",Strata)], )
+    if(!is.null(Strata))
+      molten <- subset[,c("ID",paste(bacteria),"predictor2",Strata)] %>% gather(variable, value,-"predictor2",-"ID",-Strata)
+    else
+      molten <- subset[,c("ID",paste(bacteria),"predictor2")] %>% gather(variable, value,-"predictor2",-"ID")
   }
   if(!is.null(color_by)){
     molten[molten$variable != paste("Other",type),"colvar"] <- molten %>% dplyr::filter(variable != paste("Other",type)) %>% .[,"variable"] %>% match(tax[,type]) %>% tax[.,"phylum"] %>% as.character
