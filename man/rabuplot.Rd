@@ -8,6 +8,7 @@ rabuplot(
   phylo_ob,
   predictor,
   type = "genus",
+  relative_abun = TRUE,
   xlabs = "Relative abundance (\%)",
   ylabs = "Average relative abundance",
   main = "Relative abundance plot",
@@ -15,7 +16,8 @@ rabuplot(
   violin_scale = "width",
   legend_title = predictor,
   N_taxa = 15,
-  No_other_type = FALSE,
+  By_median = TRUE,
+  no_other_type = FALSE,
   legend_names = NULL,
   Time = "Time",
   Timepoint = NULL,
@@ -23,38 +25,114 @@ rabuplot(
   Strata_val = "1",
   No_legends = FALSE,
   No_names = FALSE,
-  By_median = TRUE,
   Only_sig = FALSE,
   log = TRUE,
   log_max = 100,
   stat_out = FALSE,
   p_val = TRUE,
+  p_stars = FALSE,
+  stats = "non-parametric",
+  p_adjust = FALSE,
   colors = NULL,
+  color_by = NULL,
   order = TRUE,
   reverse = FALSE,
-  list_OTU = NULL,
+  list_taxa = NULL,
   list_type = NULL,
   select_taxa = NULL,
   select_type = NULL,
-  relative_abun = TRUE,
   bar_chart = FALSE,
-  bar_wrap = NULL,
   bar_chart_stacked = TRUE,
-  color_by = NULL,
+  bar_wrap = NULL,
   percent = FALSE,
   order_by = "Time",
-  order_val = NULL,
-  group = NULL,
-  p_stars = FALSE,
-  remove_collapsed_taxa = FALSE,
-  stats = "non-parametric",
-  p_adjust = FALSE
+  order_val = NULL
 )
 }
 \arguments{
-\item{phylo_ob}{Phyloseq object with metadata in sample_data}
+\item{phylo_ob}{Phyloseq object with metadata in sample_data.}
 
-\item{predictor}{Predictor for stastics/plotting}
+\item{predictor}{Predictor of interestfor stastics/plotting in sample_data.}
+
+\item{type}{Taxonomic rank from tax_table in lower case, default is "genus".}
+
+\item{relative_abun}{Use geom_violin for plotting, else absolute; default is TRUE.}
+
+\item{xlabs}{X-axis label}
+
+\item{ylabs}{Y-axis label}
+
+\item{main}{Title of plot}
+
+\item{violin}{Use geom_violin for plotting, else boxplot; default is TRUE.}
+
+\item{violin_scale}{Scale option for geom_violin; default is "width".}
+
+\item{legend_title}{Legend title; default is name of predictor.}
+
+\item{N_taxa}{Number of taxa to be plotted; default is 15.}
+
+\item{By_median}{Order plot by median abundances, else mean abundances; default is TRUE.}
+
+\item{no_other_type}{Taxa in lower abundances than top N_taxa, are grouped as "other", this will remove this group from the plot; default is FALSE.}
+
+\item{legend_names}{Define variable names for legend text.}
+
+\item{Time}{Time variable name for longitudinal datasets.}
+
+\item{Timepoint}{Value in variable @Time to select.}
+
+\item{Strata}{Name of variable for stratification;}
+
+\item{Strata_val}{Value in variable @Strata to keep; default is 1.}
+
+\item{No_legends}{Removes legend; default is FALSE.}
+
+\item{No_names}{Removes taxa names; default is FALSE.}
+
+\item{Only_sig}{Only keep significant taxa; default is FALSE.}
+
+\item{log}{Present plot on a log scale; default is TRUE.}
+
+\item{log_max}{Maximum value of log-axis; default is 100.}
+
+\item{stat_out}{Outputs a data.frame with statistics to Global environment; default is FALSE.}
+
+\item{p_val}{Displays p-values on plot; default is TRUE.}
+
+\item{p_stars}{Shows stars instead of p-values; default is FALSE.}
+
+\item{stats}{Select type of statistical test; options "non-parametric", "parametric", "mgs_feature"; defaule is "non-parametric".}
+
+\item{p_adjust}{FDR adjust p-values; default is FALSE.}
+
+\item{colors}{define list of colors for plot. If not color brewer will be used; default is NULL.}
+
+\item{color_by}{define taxonomic rank to color by; default is NULL.}
+
+\item{order}{Order by abundance, else alphabetically; default is TRUE.}
+
+\item{reverse}{Flip taxa order; default is FALSE.}
+
+\item{list_taxa}{A list of specific taxa names to be analyzed; default is NULL.}
+
+\item{list_type}{Taxonomic rank of the @list_taxa; default is NULL.}
+
+\item{select_taxa}{Choose all taxa from a Taxonomic variable, eg. "Staphylocuccus"; default is NULL.}
+
+\item{select_type}{Taxonomic rank of the @select_taxa; default is NULL.}
+
+\item{bar_chart}{Choose to make bar chart; default is FALSE.}
+
+\item{bar_chart_stacked}{Produce stacked bar chart, when @bar_chart is TRUE; default is TRUE.}
+
+\item{bar_wrap}{Facet wrap bar chart by variable, when @bar_chart is TRUE; eg. Time; default is NULL.}
+
+\item{percent}{Print percentages on bar chart; default is FALSE.}
+
+\item{order_by}{Choose variable to order the selected taxa by; eg. Time; default is Time.}
+
+\item{order_val}{Choose value for @order_by; default is NULL.}
 }
 \value{
 A ggplot

@@ -2,57 +2,95 @@
 #'
 #' For creating nice microbiome plots
 #'
-#' @param phylo_ob Phyloseq object with metadata in sample_data
-#' @param predictor Predictor for stastics/plotting
+#' @param phylo_ob Phyloseq object with metadata in sample_data.
+#' @param predictor Predictor of interestfor stastics/plotting in sample_data.
+#' @param type Taxonomic rank from tax_table in lower case, default is "genus".
+#' @param relative_abun Use geom_violin for plotting, else absolute; default is TRUE.
+#' @param xlabs X-axis label
+#' @param ylabs Y-axis label
+#' @param main Title of plot
+#' @param violin Use geom_violin for plotting, else boxplot; default is TRUE.
+#' @param violin_scale Scale option for geom_violin; default is "width".
+#' @param legend_title Legend title; default is name of predictor.
+#' @param N_taxa Number of taxa to be plotted; default is 15.
+#' @param By_median Order plot by median abundances, else mean abundances; default is TRUE.
+#' @param no_other_type Taxa in lower abundances than top N_taxa, are grouped as "other", this will remove this group from the plot; default is FALSE.
+#' @param legend_names Define variable names for legend text.
+#' @param Time Time variable name for longitudinal datasets.
+#' @param Timepoint Value in variable @Time to select.
+#' @param Strata Name of variable for stratification;
+#' @param Strata_val Value in variable @Strata to keep; default is 1.
+#' @param No_legends Removes legend; default is FALSE.
+#' @param No_names Removes taxa names; default is FALSE.
+#' @param Only_sig Only keep significant taxa; default is FALSE.
+#' @param log Present plot on a log scale; default is TRUE.
+#' @param log_max Maximum value of log-axis; default is 100.
+#' @param stat_out Outputs a data.frame with statistics to Global environment; default is FALSE.
+#' @param p_val Displays p-values on plot; default is TRUE.
+#' @param p_stars Shows stars instead of p-values; default is FALSE.
+#' @param stats Select type of statistical test; options "non-parametric", "parametric", "mgs_feature"; defaule is "non-parametric".
+#' @param p_adjust FDR adjust p-values; default is FALSE.
+#' @param colors define list of colors for plot. If not color brewer will be used; default is NULL.
+#' @param color_by define taxonomic rank to color by; default is NULL.
+#' @param order Order by abundance, else alphabetically; default is TRUE.
+#' @param reverse Flip taxa order; default is FALSE.
+#' @param list_taxa A list of specific taxa names to be analyzed; default is NULL.
+#' @param list_type Taxonomic rank of the @list_taxa; default is NULL.
+#' @param select_taxa Choose all taxa from a Taxonomic variable, eg. "Staphylocuccus"; default is NULL.
+#' @param select_type Taxonomic rank of the @select_taxa; default is NULL.
+#' @param bar_chart Choose to make bar chart; default is FALSE.
+#' @param bar_chart_stacked Produce stacked bar chart, when @bar_chart is TRUE; default is TRUE.
+#' @param bar_wrap Facet wrap bar chart by variable, when @bar_chart is TRUE; eg. Time; default is NULL.
+#' @param percent Print percentages on bar chart; default is FALSE.
+#' @param order_by Choose variable to order the selected taxa by; eg. Time; default is Time.
+#' @param order_val Choose value for @order_by; default is NULL.
+#'
 #' @import ggplot2 phyloseq metagenomeSeq dplyr RColorBrewer
 #' @return A ggplot
-
 #' @export
 
 rabuplot <- function(phylo_ob,
-                                predictor,
-                                type="genus",
-                                xlabs = "Relative abundance (%)",
-                                ylabs = "Average relative abundance",
-                                main = "Relative abundance plot",
-                                violin=TRUE,
-                                violin_scale = "width",
-                                legend_title=predictor,
-                                N_taxa=15,
-                                No_other_type=FALSE,
-                                legend_names=NULL,
-                                Time="Time",
-                                Timepoint=NULL,
-                                Strata=NULL,
-                                Strata_val="1",
-                                No_legends = FALSE,
-                                No_names=FALSE,
-                                By_median=TRUE,
-                                Only_sig=FALSE,
-                                log=TRUE,
-                                log_max=100,
-                                stat_out=FALSE,
-                                p_val = TRUE,
-                                colors=NULL,
-                                order=TRUE,
-                                reverse=FALSE,
-                                list_OTU=NULL,
-                                list_type=NULL,
-                                select_taxa=NULL,
-                                select_type=NULL,
-                                relative_abun=TRUE,
-                                bar_chart=FALSE,
-                                bar_wrap=NULL,
-                                bar_chart_stacked=TRUE,
-                                color_by=NULL,
-                                percent=FALSE,
-                                order_by="Time",
-                                order_val=NULL,
-                                group=NULL,
-                                p_stars=FALSE,
-                                remove_collapsed_taxa=FALSE,
-                                stats="non-parametric",
-                                p_adjust = FALSE)
+                     predictor,
+                     type="genus",
+                     relative_abun=TRUE,
+                     xlabs = "Relative abundance (%)",
+                     ylabs = "Average relative abundance",
+                     main = "Relative abundance plot",
+                     violin=TRUE,
+                     violin_scale = "width",
+                     legend_title=predictor,
+                     N_taxa=15,
+                     By_median=TRUE,
+                     no_other_type=FALSE,
+                     legend_names=NULL,
+                     Time="Time",
+                     Timepoint=NULL,
+                     Strata=NULL,
+                     Strata_val="1",
+                     No_legends = FALSE,
+                     No_names=FALSE,
+                     Only_sig=FALSE,
+                     log=TRUE,
+                     log_max=100,
+                     stat_out=FALSE,
+                     p_val = TRUE,
+                     p_stars=FALSE,
+                     stats="non-parametric",
+                     p_adjust = FALSE,
+                     colors=NULL,
+                     color_by=NULL,
+                     order=TRUE,
+                     reverse=FALSE,
+                     list_taxa=NULL,
+                     list_type=NULL,
+                     select_taxa=NULL,
+                     select_type=NULL,
+                     bar_chart=FALSE,
+                     bar_chart_stacked=TRUE,
+                     bar_wrap=NULL,
+                     percent=FALSE,
+                     order_by="Time",
+                     order_val=NULL)
 {
 
   otu_mat <- t(as(otu_table(phylo_ob), "matrix"))
@@ -106,7 +144,6 @@ rabuplot <- function(phylo_ob,
     }
     if(length(levels(factor(pred)))==2){
       # test with featureModel
-
       mgs <- newMRexperiment(counts = t(abund2))
       mgsp <- cumNormStat(mgs)
       mgs <- cumNorm(mgs, mgsp)
@@ -125,22 +162,10 @@ rabuplot <- function(phylo_ob,
   }
   abund$"reads" <- NULL
 
-
-  if (is.null(list_OTU) & !is.null(select_taxa))  list_OTU <- tax[tax[,select_type] %in% select_taxa,type]
-  if (!is.null(list_OTU)) {
-    abund <- abund[,colnames(abund) %in% list_OTU, drop = FALSE]
+  if (is.null(list_taxa) & !is.null(select_taxa))  list_taxa <- tax[tax[,select_type] %in% select_taxa,type]
+  if (!is.null(list_taxa)) {
+    abund <- abund[,colnames(abund) %in% list_taxa, drop = FALSE]
     unique_tax <- names(abund)
-  }
-  if(remove_collapsed_taxa){
-    for(i in org_tax) {
-      unique_tax <- unique_tax[!grepl(paste(i), unique_tax)]
-    }
-    unique_tax <- names(abund)
-    abund1 <- abund[,(colnames(abund) %in% unique_tax), drop = FALSE]
-    '%!in%' <- function(x,y)!('%in%'(x,y))
-    unclassified <- data.frame(unclassified=rowSums(abund[,(colnames(abund) %!in% unique_tax), drop = FALSE]))
-    abund <- cbind(abund1,unclassified)
-    unique_tax <- c(unique_tax,"unclassified")
   }
   index <- !is.na(rownames(samp))
   if(length(abund)>1){
@@ -153,7 +178,7 @@ rabuplot <- function(phylo_ob,
       abund <- abund[-(length(unique_tax)-(length(unique_tax)-N_taxa)+1):-length(unique_tax)]
     }
 
-    if(No_other_type)  abund[,paste("Other",type)] <- NULL
+    if(no_other_type)  abund[,paste("Other",type)] <- NULL
   }
   bacteria <- rev(names(abund))
   subset <- cbind(samp[!names(samp) %in% bacteria], abund) #fjerner evt eksisterende navne fra dataset og merger;
@@ -225,10 +250,6 @@ rabuplot <- function(phylo_ob,
       molten_mean <- aggregate(molten$value,by=list(molten$variable, molten$predictor2, molten$wrap, molten$colvar),FUN=mean)
       names(molten_mean) <- c("type", "predictor2","wrap","colvar", "value")
     }
-    # if(!is.null(group)){
-    #   molten_mean <- aggregate(molten$value,by=list(molten$variable, molten$predictor2,molten$colvar, molten[,group]),FUN=mean)
-    #   names(molten_mean) <- c("type", "predictor2","colvar","group", "value")
-    # }
     if(is.null(bar_wrap)){
       molten_mean <- aggregate(molten$value,by=list(molten$variable, molten$predictor2,molten$colvar),FUN=mean)
       names(molten_mean) <- c("type", "predictor2","colvar", "value")
@@ -257,7 +278,7 @@ rabuplot <- function(phylo_ob,
       pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(molten, molten$variable), function(x) oneway.test(value ~ predictor2, x)$p.value), variable=factor(paste(ordered)))
       message("Parametric")
     }
-    pval <<- pval
+    pval <- pval
     #  pval$pval = p.adjust(pval$pval, "fdr")
     pval$pval <- ifelse(is.na(pval$pval),1,pval$pval)
     pval$pval_sig <- ifelse(pval$pval<0.05,pval$pval,NA)
@@ -265,13 +286,8 @@ rabuplot <- function(phylo_ob,
     if(Only_sig){
       index <- rownames(pval[is.na(pval$pval_notsig),])
       molten <- molten[molten$variable %in% index,]
-      pval <-   pval[is.na(pval$pval_notsig),]
+      pval <- pval[is.na(pval$pval_notsig),]
     }
-    #  if (!is.null(list_OTU)){
-    #   list_tax <- as.character(tax[rownames(tax) %in% list_OTU,type])
-    #  molten <- molten[molten$variable  %in% list_tax,]
-    #    pval <-    pval[pval$variable  %in% list_tax,]
-    #  }
     if (!is.null(list_type)){
       molten <- molten[molten$variable  %in% list_type,]
       pval <-    pval[pval$variable  %in% list_type,]
@@ -319,9 +335,7 @@ rabuplot <- function(phylo_ob,
       }
       p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ guides(fill = guide_legend(title=legend_title)) + theme(strip.background = element_blank()) +coord_flip()
 
-
-
-      if(is.null(color_by) & is.null(bar_wrap) & bar_chart_stacked==TRUE) p <- p+theme(legend.position="none")
+  if(is.null(color_by) & is.null(bar_wrap) & bar_chart_stacked==TRUE) p <- p+theme(legend.position="none")
     }
   }
   if(!is.null(bar_wrap))   { p <- p+ facet_grid(~wrap)+ theme(strip.background = element_blank())
