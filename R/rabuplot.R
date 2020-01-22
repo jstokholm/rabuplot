@@ -5,7 +5,7 @@
 #' @param phylo_ob Phyloseq object with metadata in sample_data.
 #' @param predictor Predictor of interestfor stastics/plotting in sample_data.
 #' @param type Taxonomic rank from tax_table, case insensitive; default is "genus".
-#' @param relative_abun Use geom_violin for plotting, else absolute; default is TRUE.
+#' @param relative_abun Use relative abundances, else absolute; default is TRUE.
 #' @param xlabs X-axis label
 #' @param ylabs Y-axis label
 #' @param main Title of plot

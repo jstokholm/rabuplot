@@ -1,8 +1,8 @@
 Package: rabuplot
-Title: Makes nice microbial abundance plots
+Title: Relative Abundance Plot
 Version: 0.0.0.9001
 Authors@R: person("Jakob", "Stokholm", email = "stokholm@copsac.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+Description: Makes nice microbial abundance plots
 Depends: R (>= 3.5.1)
 Imports: ggplot2, phyloseq, metagenomeSeq, dplyr, tidyr, RColorBrewer
 License: GDP
