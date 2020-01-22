@@ -4,7 +4,7 @@
 #'
 #' @param phylo_ob Phyloseq object with metadata in sample_data.
 #' @param predictor Predictor of interestfor stastics/plotting in sample_data.
-#' @param type Taxonomic rank from tax_table in lower case, default is "genus".
+#' @param type Taxonomic rank from tax_table, case insensitive; default is "genus".
 #' @param relative_abun Use geom_violin for plotting, else absolute; default is TRUE.
 #' @param xlabs X-axis label
 #' @param ylabs Y-axis label
@@ -22,6 +22,7 @@
 #' @param Strata_val Value in variable @Strata to keep; default is 1.
 #' @param No_legends Removes legend; default is FALSE.
 #' @param No_names Removes taxa names; default is FALSE.
+#' @param italic_names Taxa names will be in italic e.g. usable for family, genus, species levels; default is TRUE
 #' @param Only_sig Only keep significant taxa; default is FALSE.
 #' @param log Present plot on a log scale; default is TRUE.
 #' @param log_max Maximum value of log-axis; default is 100.
@@ -45,7 +46,7 @@
 #' @param order_by Choose variable to order the selected taxa by; eg. Time; default is Time.
 #' @param order_val Choose value for @order_by; default is NULL.
 #'
-#' @import ggplot2 phyloseq metagenomeSeq dplyr RColorBrewer
+#' @import ggplot2 phyloseq metagenomeSeq dplyr tidyr RColorBrewer
 #' @return A ggplot
 #' @export
 
@@ -69,6 +70,7 @@ rabuplot <- function(phylo_ob,
                      Strata_val="1",
                      No_legends = FALSE,
                      No_names=FALSE,
+                     italic_names=TRUE,
                      Only_sig=FALSE,
                      log=TRUE,
                      log_max=100,
@@ -103,6 +105,7 @@ rabuplot <- function(phylo_ob,
   tax[is.na(tax)] <- as.factor("unclassified")
   org_tax <- names(tax)
   names(tax) <- tolower(names(tax))
+  type <- tolower(type)
   tax$OTU <- rownames(tax)
   samp <- data.frame(sample_data(phylo_ob), stringsAsFactors=TRUE)
   samp <- samp[index,]
@@ -341,7 +344,7 @@ rabuplot <- function(phylo_ob,
   if(!is.null(bar_wrap))   { p <- p+ facet_grid(~wrap)+ theme(strip.background = element_blank())
   if(bar_chart==FALSE) p$layers[4:5] <- NULL
   }
-  if((type=="genus" | type=="family" | type=="species") &  bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
+  if(italic_names==TRUE &  bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
   #  if(!is.null(color_by) & (color_by=="genus" | color_by=="family" | color_by=="species"))
   if(!is.null(color_by)) {
     p <- p + facet_grid(~predictor2, scales = "free", space = "free")

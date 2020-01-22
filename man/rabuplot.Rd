@@ -25,6 +25,7 @@ rabuplot(
   Strata_val = "1",
   No_legends = FALSE,
   No_names = FALSE,
+  italic_names = TRUE,
   Only_sig = FALSE,
   log = TRUE,
   log_max = 100,
@@ -54,7 +55,7 @@ rabuplot(
 
 \item{predictor}{Predictor of interestfor stastics/plotting in sample_data.}
 
-\item{type}{Taxonomic rank from tax_table in lower case, default is "genus".}
+\item{type}{Taxonomic rank from tax_table, case insensitive; default is "genus".}
 
 \item{relative_abun}{Use geom_violin for plotting, else absolute; default is TRUE.}
 
@@ -89,6 +90,8 @@ rabuplot(
 \item{No_legends}{Removes legend; default is FALSE.}
 
 \item{No_names}{Removes taxa names; default is FALSE.}
+
+\item{italic_names}{Taxa names will be in italic e.g. usable for family, genus, species levels; default is TRUE}
 
 \item{Only_sig}{Only keep significant taxa; default is FALSE.}
 
