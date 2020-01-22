@@ -37,7 +37,7 @@
 #' @param reverse Flip taxa order; default is FALSE.
 #' @param list_taxa A list of specific taxa names to be analyzed; default is NULL.
 #' @param list_type Taxonomic rank of the @list_taxa; default is NULL.
-#' @param select_taxa Choose all taxa from a Taxonomic variable, eg. "Staphylocuccus"; default is NULL.
+#' @param select_taxa Choose all taxa from a Taxonomic variable, eg. "Staphylocuccus" or "Staph" or "cuccus"; default is NULL.
 #' @param select_type Taxonomic rank of the @select_taxa; default is NULL.
 #' @param bar_chart Choose to make bar chart; default is FALSE.
 #' @param bar_chart_stacked Produce stacked bar chart, when @bar_chart is TRUE; default is TRUE.
@@ -165,7 +165,8 @@ rabuplot <- function(phylo_ob,
   }
   abund$"reads" <- NULL
 
-  if (is.null(list_taxa) & !is.null(select_taxa))  list_taxa <- tax[tax[,select_type] %in% select_taxa,type]
+  if (is.null(list_taxa) & !is.null(select_taxa))  list_taxa <- as.character(unique(tax[grep(select_taxa,tax[,select_type]),type]))
+
   if (!is.null(list_taxa)) {
     abund <- abund[,colnames(abund) %in% list_taxa, drop = FALSE]
     unique_tax <- names(abund)
