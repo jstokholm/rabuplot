@@ -23,8 +23,8 @@ rabuplot(
   Timepoint = NULL,
   Strata = NULL,
   Strata_val = "1",
-  No_legends = FALSE,
-  No_names = FALSE,
+  no_legends = FALSE,
+  no_names = FALSE,
   italic_names = TRUE,
   Only_sig = FALSE,
   log = TRUE,
@@ -57,7 +57,7 @@ rabuplot(
 
 \item{type}{Taxonomic rank from tax_table, case insensitive; default is "genus".}
 
-\item{relative_abun}{Use geom_violin for plotting, else absolute; default is TRUE.}
+\item{relative_abun}{Use relative abundances, else absolute; default is TRUE.}
 
 \item{xlabs}{X-axis label}
 
@@ -87,9 +87,9 @@ rabuplot(
 
 \item{Strata_val}{Value in variable @Strata to keep; default is 1.}
 
-\item{No_legends}{Removes legend; default is FALSE.}
+\item{no_legends}{Removes legend; default is FALSE.}
 
-\item{No_names}{Removes taxa names; default is FALSE.}
+\item{no_names}{Removes taxa names; default is FALSE.}
 
 \item{italic_names}{Taxa names will be in italic e.g. usable for family, genus, species levels; default is TRUE}
 

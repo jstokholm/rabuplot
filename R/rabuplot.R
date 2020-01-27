@@ -20,8 +20,8 @@
 #' @param Timepoint Value in variable @Time to select.
 #' @param Strata Name of variable for stratification;
 #' @param Strata_val Value in variable @Strata to keep; default is 1.
-#' @param No_legends Removes legend; default is FALSE.
-#' @param No_names Removes taxa names; default is FALSE.
+#' @param no_legends Removes legend; default is FALSE.
+#' @param no_names Removes taxa names; default is FALSE.
 #' @param italic_names Taxa names will be in italic e.g. usable for family, genus, species levels; default is TRUE
 #' @param Only_sig Only keep significant taxa; default is FALSE.
 #' @param log Present plot on a log scale; default is TRUE.
@@ -68,8 +68,8 @@ rabuplot <- function(phylo_ob,
                      Timepoint=NULL,
                      Strata=NULL,
                      Strata_val="1",
-                     No_legends = FALSE,
-                     No_names=FALSE,
+                     no_legends = FALSE,
+                     no_names=FALSE,
                      italic_names=TRUE,
                      Only_sig=FALSE,
                      log=TRUE,
@@ -96,7 +96,7 @@ rabuplot <- function(phylo_ob,
 {
 
   otu_mat <- t(as(otu_table(phylo_ob), "matrix"))
-  otu_mat  <- otu_mat[,colSums(otu_mat)>1] #removes OTUs <1;
+  otu_mat  <- otu_mat[,colSums(otu_mat)>0] #removes empty OTUs;
   index <- !is.na(get_variable(phylo_ob, predictor))
   otu_mat <- otu_mat[index,]
   OTU_index <- colnames(otu_mat)
@@ -113,7 +113,7 @@ rabuplot <- function(phylo_ob,
   if(!is.null(Timepoint)){
     index <- rownames(samp[(samp[,Time] ==Timepoint),])
     otu_mat <- otu_mat[rownames(otu_mat) %in% index,]
-    otu_mat  <- otu_mat[,colSums(otu_mat)>0] #fjerner tomme OTUs;
+    otu_mat  <- otu_mat[,colSums(otu_mat)>0] #removes empty OTUs;
     OTU_index <- colnames(otu_mat)
     tax <- tax[rownames(tax) %in% OTU_index,]
     samp <- samp[rownames(samp) %in% index,]
@@ -165,7 +165,7 @@ rabuplot <- function(phylo_ob,
   }
   abund$"reads" <- NULL
 
-  if (is.null(list_taxa) & !is.null(select_taxa))  list_taxa <- as.character(unique(tax[grep(select_taxa,tax[,select_type]),type]))
+  if (is.null(list_taxa) & !is.null(select_taxa))  list_taxa <- as.character(unique(tax[grep(select_taxa,tax[,select_type],ignore.case=TRUE),type]))
 
   if (!is.null(list_taxa)) {
     abund <- abund[,colnames(abund) %in% list_taxa, drop = FALSE]
@@ -361,8 +361,8 @@ rabuplot <- function(phylo_ob,
   p <-  p+ theme(plot.background = element_blank(),panel.background = element_blank(),plot.title = element_text(hjust = 0.5))
   if (bar_chart==TRUE & bar_chart_stacked==FALSE  & percent==FALSE) p <- p+ scale_y_continuous(labels = scales::percent)
   if (bar_chart==TRUE & bar_chart_stacked==FALSE & percent==TRUE) p <- p+  geom_text(aes(label = paste0(sprintf("%.2f",value*100), "%")), hjust = -.12, position=position_dodge(width=0.95))+scale_y_continuous(limits=c(0,max(molten_mean$value)+0.2),labels = scales::percent)
-  if(No_legends) p <- p + theme(legend.position="none")
-  if(No_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
+  if(no_legends) p <- p + theme(legend.position="none")
+  if(no_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
   # if(!is.null(bar_wrap)) p + guides(fill = guide_legend(title="legend_title", reverse = F))
   if(p_adjust){
 
