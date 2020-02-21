@@ -248,6 +248,7 @@ rabuplot <- function(phylo_ob,
     if(is.null(color_by) & bar_chart_stacked==FALSE)   cols <- cols[1:length(levels(factor(molten$predictor2)))]
 
     else cols <- cols[c(1:length(levels(factor(molten$colvar)))-1,length(cols))]
+    if(!is.null(colors)) cols <- colors
     if(is.null(color_by) & reverse==FALSE) cols <- rev(cols)
     if(!is.null(color_by) & reverse==TRUE) cols <- rev(cols)
     if(!is.null(bar_wrap)){
@@ -342,7 +343,7 @@ rabuplot <- function(phylo_ob,
   if(is.null(color_by) & is.null(bar_wrap) & bar_chart_stacked==TRUE) p <- p+theme(legend.position="none")
     }
   }
-  if(!is.null(bar_wrap))   { p <- p+ facet_grid(~wrap)+ theme(strip.background = element_blank())
+  if(!is.null(bar_wrap))   { p <- p+ facet_grid(~wrap,scales = "free", space = "free")+ theme(strip.background = element_blank())
   if(bar_chart==FALSE) p$layers[4:5] <- NULL
   }
   if(italic_names==TRUE &  bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
