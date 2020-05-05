@@ -95,6 +95,7 @@ rabuplot <- function(phylo_ob,
                      order_val=NULL)
 {
 
+  phylo_ob <- prune_samples(sample_sums(phylo_ob)>0,phylo_ob) #removes empty samples;
   otu_mat <- t(as(otu_table(phylo_ob), "matrix"))
   otu_mat  <- otu_mat[,colSums(otu_mat)>0] #removes empty OTUs;
   index <- !is.na(get_variable(phylo_ob, predictor))
