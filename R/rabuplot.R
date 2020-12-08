@@ -101,9 +101,9 @@ rabuplot <- function(phylo_ob,
   index <- !is.na(get_variable(phylo_ob, predictor))
   otu_mat <- otu_mat[index,]
   OTU_index <- colnames(otu_mat)
-  tax <- as(tax_table(phylo_ob), "matrix") %>% data.frame
+  tax <- as(tax_table(phylo_ob), "matrix") %>% data.frame(stringsAsFactors=FALSE)
   tax <- tax[rownames(tax) %in% OTU_index,]
-  tax[is.na(tax)] <- as.factor("unclassified")
+  tax[is.na(tax)] <- "unclassified"
   org_tax <- names(tax)
   names(tax) <- tolower(names(tax))
   type <- tolower(type)
@@ -264,7 +264,8 @@ rabuplot <- function(phylo_ob,
     molten_mean$colvar <- factor(molten_mean$colvar, levels=ordered2)
 
   }
-
+ged <<-molten
+ord <<- ordered
 
   #Calculate pvalue for outcomes
   if(p_val==TRUE & ((bar_chart==TRUE & bar_chart_stacked==FALSE) | bar_chart==FALSE) & is.null(color_by)){
@@ -274,17 +275,37 @@ rabuplot <- function(phylo_ob,
       else pval <- pval[match(pval$variable,ordered),]
     }
     if(stats=="non-parametric"){
-      if(length(levels(subset$predictor2))>2) #Kruskal-Wallis for more than 2 groups
-        pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(molten, molten$variable), function(x) kruskal.test(value ~ predictor2, x)$p.value), variable=factor(paste(ordered)))
-      if(length(levels(subset$predictor2))==2)   #Wilcoxon
-        pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(molten, molten$variable), function(x) wilcox.test(value ~ predictor2, x)$p.value), variable=factor(paste(ordered)))
+      if(length(levels(subset$predictor2))>2) {#Kruskal-Wallis for more than 2 groups
+        pval <- data.frame()
+      for (i in 1:length(unique(molten$wrap)))
+      {
+        test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
+        pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) kruskal.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))
+        pval <- rbind(pval,pval_tmp)
+      }
+      }
+      if(length(levels(subset$predictor2))==2) {  #Wilcoxon
+        pval <- data.frame()
+      for (i in 1:length(unique(molten$wrap)))
+      {
+        test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
+        pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) wilcox.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))
+        pval <- rbind(pval,pval_tmp)
+        }
+      }
       message("Non-parametric")
     }
     if(stats=="parametric") {
-      pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(molten, molten$variable), function(x) oneway.test(value ~ predictor2, x)$p.value), variable=factor(paste(ordered)))
+        pval <- data.frame()
+        for (i in 1:length(unique(molten$wrap)))
+        {
+          test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
+          pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) oneway.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))
+          pval <- rbind(pval,pval_tmp)
+        }
       message("Parametric")
     }
-    pval <- pval
+    pval$predictor2 <- molten$predictor2[1]
     #  pval$pval = p.adjust(pval$pval, "fdr")
     pval$pval <- ifelse(is.na(pval$pval),1,pval$pval)
     pval$pval_sig <- ifelse(pval$pval<0.05,pval$pval,NA)
@@ -316,7 +337,7 @@ rabuplot <- function(phylo_ob,
     ordered <- levels(factor(molten$colvar))
     p <- ggplot(molten, aes(x=variable, y=value, fill=predictor2)) +
     {if(violin){geom_violin(scale = violin_scale,width = 0.65, position=position_dodge(width=0.9),size=1, color="#00000000")} else {geom_boxplot(width = 0.55, position=position_dodge(width=0.8),size=0.3,outlier.size = 0,outlier.color = "grey")}}+
-    {if(violin){stat_summary(fun.y=median, fun.ymin = min, fun.ymax = max, geom="point", size=0.8, color="black", position=position_dodge(width=0.9))} else {stat_summary(fun.y=median, fun.ymin = min, fun.ymax = max, geom="point", size=0.8, color="#00000000", position=position_dodge(width=0.9))}}+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),legend.text=element_text(size=12),legend.key.size = unit(0.5, "cm"))+ coord_flip() +xlab(NULL)+ylab(xlabs)+ggtitle(main)
+    {if(violin){stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="black", position=position_dodge(width=0.9))} else {stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="#00000000", position=position_dodge(width=0.9))}}+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),legend.text=element_text(size=12),legend.key.size = unit(0.5, "cm"))+ coord_flip() +xlab(NULL)+ylab(xlabs)+ggtitle(main)
     if(length(unique(molten$variable))>1) p <- p+ geom_vline(xintercept=seq(1.5, length(unique(molten$variable))-0.5, 1),lwd=0.2, colour="grey")
     if(p_stars==TRUE & p_val==TRUE)
       p <- p + annotate("text",size=3,hjust=1,fontface="plain", x = pval$variable, y = pval$y,  label=paste(stars.pval(pval$pval)))
@@ -336,8 +357,7 @@ rabuplot <- function(phylo_ob,
         p <-   ggplot(molten_mean,aes(x=type,y=value, fill=predictor2))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=legend_names)
         if(p_stars==TRUE & p_val==TRUE)
           p <- p + annotate("text",size=3,hjust=1,fontface="plain", x = pval$variable, y = pval$y,  label=paste(stars.pval(pval$pval)))
-        if(p_stars==FALSE & p_val==TRUE)
-          p <- p + annotate("text",size=3,hjust=1,fontface="plain", x = pval$variable, y = pval$y,  label=ifelse(is.na(pval$pval_notsig), "",paste(format.pval(pval$pval_notsig,1,0.001,nsmall=3)))) + annotate("text",size=3,hjust=1,fontface="bold", x = pval$variable, y = pval$y,  label=ifelse(is.na(pval$pval_sig), "",paste(format.pval(pval$pval_sig,1,0.001,nsmall=3))))
+
       }
       p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ guides(fill = guide_legend(title=legend_title)) + theme(strip.background = element_blank()) +coord_flip()
 
@@ -366,6 +386,8 @@ rabuplot <- function(phylo_ob,
   if(no_legends) p <- p + theme(legend.position="none")
   if(no_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
   # if(!is.null(bar_wrap)) p + guides(fill = guide_legend(title="legend_title", reverse = F))
+  if(p_stars==FALSE & p_val==TRUE)
+    p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(is.na(pval_notsig), "",paste(format.pval(pval_notsig,1,0.001,nsmall=3)))),size=3,hjust=1,fontface="plain")+geom_text(data=pval,aes(x=variable,y=y,label=ifelse(is.na(pval_sig), "",paste(format.pval(pval_sig,1,0.001,nsmall=3)))),size=3,hjust=1,fontface="bold")
   if(p_adjust){
 
     p <- p + scale_y_log10(breaks=c(.000001,.001,.01,.1,1,10,100),labels=c("0%","0.1%","1%","10%","100%", "P-value", "q-value"))
