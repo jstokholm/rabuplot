@@ -41,8 +41,8 @@
 #' @param select_type Taxonomic rank of the @select_taxa; default is NULL.
 #' @param bar_chart Choose to make bar chart; default is FALSE.
 #' @param bar_chart_stacked Produce stacked bar chart, when @bar_chart is TRUE; default is TRUE.
-#' @param bar_wrap Facet wrap bar chart by variable, when @bar_chart is TRUE; eg. Time; default is NULL.
 #' @param percent Print percentages on bar chart; default is FALSE.
+#' @param facet_wrap Facet wrap chart by variable; eg. Time; default is NULL.
 #' @param order_by Choose variable to order the selected taxa by; eg. Time; default is Time.
 #' @param order_val Choose value for @order_by; default is NULL.
 #'
@@ -89,7 +89,7 @@ rabuplot <- function(phylo_ob,
                      select_type=NULL,
                      bar_chart=FALSE,
                      bar_chart_stacked=TRUE,
-                     bar_wrap=NULL,
+                     facet_wrap=NULL,
                      percent=FALSE,
                      order_by="Time",
                      order_val=NULL)
@@ -190,14 +190,14 @@ rabuplot <- function(phylo_ob,
   subset$predictor2 <-  as.factor(subset[,predictor])
   subset$ID <- rownames(subset)
   if(!is.null(Strata)) subset[,Strata] <- as.factor(subset[,Strata])
-  if(!is.null(bar_wrap)){
-    subset$wrap <-  as.factor(subset[,bar_wrap])
+  if(!is.null(facet_wrap)){
+    subset$wrap <-  as.factor(subset[,facet_wrap])
     if(!is.null(Strata))
       molten <- subset[,c("ID",paste(bacteria),"predictor2",Strata,"wrap")] %>% gather(variable, value,-"predictor2",-"ID",-Strata,-"wrap")
     else
       molten <- subset[,c("ID",paste(bacteria),"predictor2","wrap")] %>% gather(variable, value,-"predictor2",-"ID",-"wrap")
   }
-  if(is.null(bar_wrap)){
+  if(is.null(facet_wrap)){
     if(!is.null(Strata))
       molten <- subset[,c("ID",paste(bacteria),"predictor2",Strata)] %>% gather(variable, value,-"predictor2",-"ID",-Strata)
     else
@@ -252,11 +252,11 @@ rabuplot <- function(phylo_ob,
     if(!is.null(colors)) cols <- colors
     if(is.null(color_by) & reverse==FALSE) cols <- rev(cols)
     if(!is.null(color_by) & reverse==TRUE) cols <- rev(cols)
-    if(!is.null(bar_wrap)){
+    if(!is.null(facet_wrap)){
       molten_mean <- aggregate(molten$value,by=list(molten$variable, molten$predictor2, molten$wrap, molten$colvar),FUN=mean)
       names(molten_mean) <- c("type", "predictor2","wrap","colvar", "value")
     }
-    if(is.null(bar_wrap)){
+    if(is.null(facet_wrap)){
       molten_mean <- aggregate(molten$value,by=list(molten$variable, molten$predictor2,molten$colvar),FUN=mean)
       names(molten_mean) <- c("type", "predictor2","colvar", "value")
       molten_mean$wrap <- ""
@@ -361,10 +361,10 @@ ord <<- ordered
       }
       p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ guides(fill = guide_legend(title=legend_title)) + theme(strip.background = element_blank()) +coord_flip()
 
-  if(is.null(color_by) & is.null(bar_wrap) & bar_chart_stacked==TRUE) p <- p+theme(legend.position="none")
+  if(is.null(color_by) & is.null(facet_wrap) & bar_chart_stacked==TRUE) p <- p+theme(legend.position="none")
     }
   }
-  if(!is.null(bar_wrap))   { p <- p+ facet_grid(~wrap,scales = "free", space = "free")+ theme(strip.background = element_blank())
+  if(!is.null(facet_wrap))   { p <- p+ facet_grid(~wrap,scales = "free", space = "free")+ theme(strip.background = element_blank())
   if(bar_chart==FALSE) p$layers[4:5] <- NULL
   }
   if(italic_names==TRUE &  bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
@@ -385,7 +385,7 @@ ord <<- ordered
   if (bar_chart==TRUE & bar_chart_stacked==FALSE & percent==TRUE) p <- p+  geom_text(aes(label = paste0(sprintf("%.2f",value*100), "%")), hjust = -.12, position=position_dodge(width=0.95))+scale_y_continuous(limits=c(0,max(molten_mean$value)+0.2),labels = scales::percent)
   if(no_legends) p <- p + theme(legend.position="none")
   if(no_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
-  # if(!is.null(bar_wrap)) p + guides(fill = guide_legend(title="legend_title", reverse = F))
+  # if(!is.null(facet_wrap)) p + guides(fill = guide_legend(title="legend_title", reverse = F))
   if(p_stars==FALSE & p_val==TRUE)
     p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(is.na(pval_notsig), "",paste(format.pval(pval_notsig,1,0.001,nsmall=3)))),size=3,hjust=1,fontface="plain")+geom_text(data=pval,aes(x=variable,y=y,label=ifelse(is.na(pval_sig), "",paste(format.pval(pval_sig,1,0.001,nsmall=3)))),size=3,hjust=1,fontface="bold")
   if(p_adjust){
