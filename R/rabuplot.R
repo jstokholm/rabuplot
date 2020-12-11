@@ -264,11 +264,10 @@ rabuplot <- function(phylo_ob,
     molten_mean$colvar <- factor(molten_mean$colvar, levels=ordered2)
 
   }
-ged <<-molten
-ord <<- ordered
 
   #Calculate pvalue for outcomes
   if(p_val==TRUE & ((bar_chart==TRUE & bar_chart_stacked==FALSE) | bar_chart==FALSE) & is.null(color_by)){
+    if(is.null(facet_wrap)) molten$wrap <- ""
     if(stats=="mgs_feature"){
       pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable))
       if(length(pval$variable)-length(ordered)<0) pval <- pval[match(pval$variable,ordered[length(pval$variable)-length(ordered)]),]
