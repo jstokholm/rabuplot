@@ -385,10 +385,9 @@ rabuplot <- function(phylo_ob,
   if(no_legends) p <- p + theme(legend.position="none")
   if(no_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
   # if(!is.null(facet_wrap)) p + guides(fill = guide_legend(title="legend_title", reverse = F))
-  if(p_stars==FALSE & p_val==TRUE)
+  if(p_stars==FALSE & p_val==TRUE & bar_chart_stacked==FALSE)
     p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(is.na(pval_notsig), "",paste(format.pval(pval_notsig,1,0.001,nsmall=3)))),size=3,hjust=1,fontface="plain")+geom_text(data=pval,aes(x=variable,y=y,label=ifelse(is.na(pval_sig), "",paste(format.pval(pval_sig,1,0.001,nsmall=3)))),size=3,hjust=1,fontface="bold")
   if(p_adjust){
-
     p <- p + scale_y_log10(breaks=c(.000001,.001,.01,.1,1,10,100),labels=c("0%","0.1%","1%","10%","100%", "P-value", "q-value"))
     p <- p + annotate("text",size=3,hjust=.5,fontface="bold", x = pval$variable, y = 100,label=ifelse(p.adjust(pval$pval, "fdr") < 0.05, paste(format.pval(p.adjust(pval$pval, "fdr"),1,0.001,nsmall=3)), ""))
     p <- p + annotate("text",size=3,hjust=.5,fontface="plain", x = pval$variable, y = 100,label=ifelse(p.adjust(pval$pval, "fdr") >= 0.05, paste(format.pval(p.adjust(pval$pval, "fdr"),1,0.001,nsmall=3)), ""))
