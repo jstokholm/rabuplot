@@ -366,7 +366,7 @@ rabuplot <- function(phylo_ob,
   if(!is.null(facet_wrap))   { p <- p+ facet_grid(~wrap,scales = "free", space = "free")+ theme(strip.background = element_blank())
   if(bar_chart==FALSE) p$layers[4:5] <- NULL
   }
-  if(italic_names==TRUE &  bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
+  if(italic_names==TRUE &  (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
   #  if(!is.null(color_by) & (color_by=="genus" | color_by=="family" | color_by=="species"))
   if(!is.null(color_by)) {
     p <- p + facet_grid(~predictor2, scales = "free", space = "free")
@@ -385,7 +385,7 @@ rabuplot <- function(phylo_ob,
   if(no_legends) p <- p + theme(legend.position="none")
   if(no_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
   # if(!is.null(facet_wrap)) p + guides(fill = guide_legend(title="legend_title", reverse = F))
-  if(p_stars==FALSE & p_val==TRUE & bar_chart_stacked==FALSE)
+  if(p_stars==FALSE & p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))
     p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(is.na(pval_notsig), "",paste(format.pval(pval_notsig,1,0.001,nsmall=3)))),size=3,hjust=1,fontface="plain")+geom_text(data=pval,aes(x=variable,y=y,label=ifelse(is.na(pval_sig), "",paste(format.pval(pval_sig,1,0.001,nsmall=3)))),size=3,hjust=1,fontface="bold")
   if(p_adjust){
     p <- p + scale_y_log10(breaks=c(.000001,.001,.01,.1,1,10,100),labels=c("0%","0.1%","1%","10%","100%", "P-value", "q-value"))
