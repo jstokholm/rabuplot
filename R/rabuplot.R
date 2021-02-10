@@ -106,7 +106,6 @@ rabuplot <- function(phylo_ob,
   tax <- as(tax_table(phylo_ob), "matrix") %>% data.frame(stringsAsFactors=FALSE)
   tax <- tax[rownames(tax) %in% OTU_index,]
   tax[is.na(tax)] <- "unclassified"
-  org_tax <- names(tax)
   names(tax) <- tolower(names(tax))
   type <- tolower(type)
   tax$OTU <- rownames(tax)
@@ -148,15 +147,34 @@ rabuplot <- function(phylo_ob,
       stats="non-parametric"
       message("MGS not available for >2 predictors, switching to non-parametric")
     }
-    if(length(levels(factor(pred)))==2){
+    if(length(levels(factor(pred)))==2 & is.null(facet_wrap)){
       # test with featureModel
-      mgs <- newMRexperiment(counts = t(abund2))
-      mgsp <- cumNormStat(mgs)
-      mgs <- cumNorm(mgs, mgsp)
+      mgs <- metagenomeSeq::newMRexperiment(counts = t(abund2))
+      mgsp <- metagenomeSeq::cumNormStat(mgs)
+      mgs <- metagenomeSeq::cumNorm(mgs, mgsp)
       mod <- model.matrix(~as.numeric(pred == unique(pred)[1]))
       message("MGS FeatureModel")
       mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
       mgs_pvalues <- data.frame(variable=mgsfit$taxa,pvalues=mgsfit$pvalues)
+    }
+    if(length(levels(factor(pred)))==2 & !is.null(facet_wrap)){
+      mgs_pvalues <- data.frame()
+      for (i in 1:length(unique(samp2[,facet_wrap]))){
+        index <- samp2[,facet_wrap]==unique(samp2[,facet_wrap])[[i]]
+        samp3 <- samp2[index,]
+        abund3 <- abund2[index,]
+        pred <- samp3[,predictor]
+        # test with featureModel
+        mgs <- metagenomeSeq::newMRexperiment(counts = t(abund3))
+        mgsp <- metagenomeSeq::cumNormStat(mgs)
+        mgs <- metagenomeSeq::cumNorm(mgs, mgsp)
+        mod <- model.matrix(~as.numeric(pred == unique(pred)[1]))
+        message(paste0("MGS FeatureModel for facet_wrap = ",unique(samp2[,facet_wrap])[[i]]))
+        mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
+        pval_tmp <- data.frame(variable=mgsfit$taxa,pvalues=mgsfit$pvalues,wrap=unique(samp2[,facet_wrap])[[i]])
+        mgs_pvalues <- rbind(mgs_pvalues,pval_tmp)
+        mgs_pvalues_out <<- mgs_pvalues
+      }
     }
   }
   #Sort by abundance
@@ -208,7 +226,6 @@ rabuplot <- function(phylo_ob,
   if(!is.null(color_by)){
     molten[molten$variable != paste("Other",type),"colvar"] <- molten %>% dplyr::filter(variable != paste("Other",type)) %>% .[,"variable"] %>% match(tax[,type]) %>% tax[.,"phylum"] %>% as.character
     molten[molten$variable == paste("Other",type),"colvar"] <- "Other" %>% as.character
-
   }
 
   molten$variable <- gsub('_',' ',molten$variable)
@@ -271,9 +288,13 @@ rabuplot <- function(phylo_ob,
   if(p_val==TRUE & ((bar_chart==TRUE & bar_chart_stacked==FALSE) | bar_chart==FALSE) & is.null(color_by)){
     if(is.null(facet_wrap)) molten$wrap <- ""
     if(stats=="mgs_feature"){
-      pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable))
-      if(length(pval$variable)-length(ordered)<0) pval <- pval[match(pval$variable,ordered[length(pval$variable)-length(ordered)]),]
-      else pval <- pval[match(pval$variable,ordered),]
+      if(!is.null(facet_wrap)) {
+        pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable),wrap=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$wrap))
+      }
+      else {
+        pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable))
+        if(length(pval$variable)-length(ordered)<0) pval <- pval[match(pval$variable,ordered[length(pval$variable)-length(ordered)]),]
+      }
     }
     if(stats=="non-parametric"){
       if(length(levels(subset$predictor2))>2) {#Kruskal-Wallis for more than 2 groups
