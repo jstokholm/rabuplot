@@ -155,7 +155,7 @@ rabuplot <- function(phylo_ob,
       mod <- model.matrix(~as.numeric(pred == unique(pred)[1]))
       message("MGS FeatureModel")
       mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
-      mgs_pvalues <- data.frame(variable=mgsfit$taxa,pvalues=mgsfit$pvalues)
+      mgs_pvalues <- data.frame(variable=mgsfit$taxa,pvalues=mgsfit$pvalues) %>% mutate(p_adjust=p.adjust(pvalues, "fdr"))
     }
     if(length(levels(factor(pred)))==2 & !is.null(facet_wrap)){
       mgs_pvalues <- data.frame()
@@ -171,9 +171,8 @@ rabuplot <- function(phylo_ob,
         mod <- model.matrix(~as.numeric(pred == unique(pred)[1]))
         message(paste0("MGS FeatureModel for facet_wrap = ",unique(samp2[,facet_wrap])[[i]]))
         mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
-        pval_tmp <- data.frame(variable=mgsfit$taxa,pvalues=mgsfit$pvalues,wrap=unique(samp2[,facet_wrap])[[i]])
+        pval_tmp <- data.frame(variable=mgsfit$taxa,pvalues=mgsfit$pvalues,wrap=unique(samp2[,facet_wrap])[[i]]) %>% mutate(p_adjust=p.adjust(pvalues, "fdr"))
         mgs_pvalues <- rbind(mgs_pvalues,pval_tmp)
-        mgs_pvalues_out <<- mgs_pvalues
       }
     }
   }
@@ -289,53 +288,52 @@ rabuplot <- function(phylo_ob,
     if(is.null(facet_wrap)) molten$wrap <- ""
     if(stats=="mgs_feature"){
       if(!is.null(facet_wrap)) {
-        pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable),wrap=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$wrap))
+        pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues,p_adjust=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable),wrap=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$wrap)
       }
       else {
-        pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable))
+        pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues,p_adjust=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable))
         if(length(pval$variable)-length(ordered)<0) pval <- pval[match(pval$variable,ordered[length(pval$variable)-length(ordered)]),]
       }
     }
     if(stats=="non-parametric"){
       if(length(levels(subset$predictor2))>2) {#Kruskal-Wallis for more than 2 groups
         pval <- data.frame()
-      for (i in 1:length(unique(molten$wrap)))
-      {
-        test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
-        pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) kruskal.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))
-        pval <- rbind(pval,pval_tmp)
-      }
+        for (i in 1:length(unique(molten$wrap)))
+        {
+          test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
+          pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) kruskal.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))%>% mutate(p_adjust=p.adjust(pval, "fdr"))
+          pval <- rbind(pval,pval_tmp)
+        }
       }
       if(length(levels(subset$predictor2))==2) {  #Wilcoxon
         pval <- data.frame()
-      for (i in 1:length(unique(molten$wrap)))
-      {
-        test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
-        pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) wilcox.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))
-        pval <- rbind(pval,pval_tmp)
+        for (i in 1:length(unique(molten$wrap)))
+        {
+          test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
+          pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) wilcox.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))%>% mutate(p_adjust=p.adjust(pval, "fdr"))
+          pval <- rbind(pval,pval_tmp)
         }
       }
       message("Non-parametric")
     }
     if(stats=="parametric") {
-        pval <- data.frame()
-        for (i in 1:length(unique(molten$wrap)))
-        {
-          test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
-          pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) oneway.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))
-          pval <- rbind(pval,pval_tmp)
-        }
+      pval <- data.frame()
+      for (i in 1:length(unique(molten$wrap)))
+      {
+        test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
+        pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) oneway.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap)) %>% mutate(p_adjust=p.adjust(pval, "fdr"))
+        pval <- rbind(pval,pval_tmp)
+      }
       message("Parametric")
     }
     pval$predictor2 <- molten$predictor2[1]
     #  pval$pval = p.adjust(pval$pval, "fdr")
     pval$pval <- ifelse(is.na(pval$pval),1,pval$pval)
-    pval$pval_sig <- ifelse(pval$pval<0.05,pval$pval,NA)
-    pval$pval_notsig <- ifelse(pval$pval>=0.05,pval$pval,NA)
+    pval$p_adjust <- ifelse(is.na(pval$p_adjust),1,pval$p_adjust)
     if(Only_sig){
-      index <- rownames(pval[is.na(pval$pval_notsig),])
+      index <- rownames(pval[pval$pval<0.05,])
       molten <- molten[molten$variable %in% index,]
-      pval <- pval[is.na(pval$pval_notsig),]
+      pval <- pval[pval$pval<0.05,]
     }
     if (!is.null(list_type)){
       molten <- molten[molten$variable  %in% list_type,]
@@ -363,8 +361,7 @@ rabuplot <- function(phylo_ob,
     if(length(unique(molten$variable))>1) p <- p+ geom_vline(xintercept=seq(1.5, length(unique(molten$variable))-0.5, 1),lwd=0.2, colour="grey")
     if(p_stars==TRUE & p_val==TRUE)
       p <- p + annotate("text",size=3,hjust=1,fontface="plain", x = pval$variable, y = pval$y,  label=paste(stars.pval(pval$pval)))
-    if(p_stars==FALSE & p_val==TRUE)
-      p <- p + annotate("text",size=3,hjust=1,fontface="plain", x = pval$variable, y = pval$y,  label=ifelse(is.na(pval$pval_notsig), "",paste(format.pval(pval$pval_notsig,1,0.001,nsmall=3)))) + annotate("text",size=3,hjust=1,fontface="bold", x = pval$variable, y = pval$y,  label=ifelse(is.na(pval$pval_sig), "",paste(format.pval(pval$pval_sig,1,0.001,nsmall=3))))
+
     p <- p +  scale_fill_manual(values =cols,labels=legend_names) + guides(fill = guide_legend(title=legend_title, reverse = TRUE,override.aes = list(linetype=0, shape=16,color=rev(cols),size=5, bg="white")))
 
   }
@@ -383,7 +380,7 @@ rabuplot <- function(phylo_ob,
       }
       p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ guides(fill = guide_legend(title=legend_title)) + theme(strip.background = element_blank()) +coord_flip()
 
-  if(is.null(color_by) & is.null(facet_wrap) & bar_chart_stacked==TRUE) p <- p+theme(legend.position="none")
+      if(is.null(color_by) & is.null(facet_wrap) & bar_chart_stacked==TRUE) p <- p+theme(legend.position="none")
     }
   }
   if(!is.null(facet_wrap))   { p <- p+ facet_grid(~wrap,scales = "free", space = "free")+ theme(strip.background = element_blank())
@@ -409,11 +406,14 @@ rabuplot <- function(phylo_ob,
   if(no_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
   # if(!is.null(facet_wrap)) p + guides(fill = guide_legend(title="legend_title", reverse = F))
   if(p_stars==FALSE & p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))
-    p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(is.na(pval_notsig), "",paste(format.pval(pval_notsig,1,0.001,nsmall=3)))),size=3,hjust=1,fontface="plain")+geom_text(data=pval,aes(x=variable,y=y,label=ifelse(is.na(pval_sig), "",paste(format.pval(pval_sig,1,0.001,nsmall=3)))),size=3,hjust=1,fontface="bold")
+    p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval<0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
+  p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval>=0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
   if(p_adjust){
+    if(stats=="mgs_feature") message(paste("FDR correction applied for",length(unique(mgs_pvalues$variable)),"taxa"))
+    else  message(paste("FDR correction applied for",length(unique(pval$variable)),"taxa"))
     p <- p + scale_y_log10(breaks=c(.000001,.001,.01,.1,1,10,100),labels=c("0%","0.1%","1%","10%","100%", "P-value", "q-value"))
-    p <- p + annotate("text",size=3,hjust=.5,fontface="bold", x = pval$variable, y = 100,label=ifelse(p.adjust(pval$pval, "fdr") < 0.05, paste(format.pval(p.adjust(pval$pval, "fdr"),1,0.001,nsmall=3)), ""))
-    p <- p + annotate("text",size=3,hjust=.5,fontface="plain", x = pval$variable, y = 100,label=ifelse(p.adjust(pval$pval, "fdr") >= 0.05, paste(format.pval(p.adjust(pval$pval, "fdr"),1,0.001,nsmall=3)), ""))
+    p <- p + geom_text(data=pval,aes(x=variable,y=100,label=ifelse(p_adjust<0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=.5,fontface="bold")
+    p <- p + geom_text(data=pval,aes(x=variable,y=100,label=ifelse(p_adjust>=0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=.5)
   }
 
   p
