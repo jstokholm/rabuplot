@@ -25,7 +25,7 @@
 #' @param italic_names Taxa names will be in italic e.g. usable for family, genus, species levels; default is TRUE
 #' @param Only_sig Only keep significant taxa; default is FALSE.
 #' @param log Present plot on a log scale; default is TRUE.
-#' @param log_max Maximum value of log-axis; default is 100.
+#' @param log_max Maximum value of log-axis options:1, 10, 100; default is 100.
 #' @param stat_out Outputs a data.frame with statistics to Global environment; default is FALSE.
 #' @param p_val Displays p-values on plot; default is TRUE.
 #' @param p_stars Shows stars instead of p-values; default is FALSE.
@@ -259,7 +259,6 @@ rabuplot <- function(phylo_ob,
     }
   }
 
-
   if(bar_chart){
     log=FALSE
     cols  <- c(brewer.pal(8,"Set1"), brewer.pal(7,"Dark2"),brewer.pal(7,"Set2"),brewer.pal(12,"Set3"),brewer.pal(7,"Accent"),brewer.pal(12,"Paired"),"gray")
@@ -288,10 +287,10 @@ rabuplot <- function(phylo_ob,
     if(is.null(facet_wrap)) molten$wrap <- ""
     if(stats=="mgs_feature"){
       if(!is.null(facet_wrap)) {
-        pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues,p_adjust=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable),wrap=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$wrap)
+        pval <- data.frame(pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues,p_adjust=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable),wrap=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$wrap)
       }
       else {
-        pval <- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues,p_adjust=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable))
+        pval <- data.frame(pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues,p_adjust=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable))
         if(length(pval$variable)-length(ordered)<0) pval <- pval[match(pval$variable,ordered[length(pval$variable)-length(ordered)]),]
       }
     }
@@ -301,7 +300,7 @@ rabuplot <- function(phylo_ob,
         for (i in 1:length(unique(molten$wrap)))
         {
           test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
-          pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) kruskal.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))%>% mutate(p_adjust=p.adjust(pval, "fdr"))
+          pval_tmp<- data.frame(pval=sapply(split(test, test$variable) , function(x) kruskal.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))%>% mutate(p_adjust=p.adjust(pval, "fdr"))
           pval <- rbind(pval,pval_tmp)
         }
       }
@@ -310,7 +309,7 @@ rabuplot <- function(phylo_ob,
         for (i in 1:length(unique(molten$wrap)))
         {
           test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
-          pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) wilcox.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))%>% mutate(p_adjust=p.adjust(pval, "fdr"))
+          pval_tmp<- data.frame(pval=sapply(split(test, test$variable) , function(x) wilcox.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))%>% mutate(p_adjust=p.adjust(pval, "fdr"))
           pval <- rbind(pval,pval_tmp)
         }
       }
@@ -321,7 +320,7 @@ rabuplot <- function(phylo_ob,
       for (i in 1:length(unique(molten$wrap)))
       {
         test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
-        pval_tmp<- data.frame(y=ifelse(log_max==100,26,ifelse(log_max==10,0.126,0.0126)), pval=sapply(split(test, test$variable) , function(x) oneway.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap)) %>% mutate(p_adjust=p.adjust(pval, "fdr"))
+        pval_tmp<- data.frame(pval=sapply(split(test, test$variable) , function(x) oneway.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap)) %>% mutate(p_adjust=p.adjust(pval, "fdr"))
         pval <- rbind(pval,pval_tmp)
       }
       message("Parametric")
@@ -345,11 +344,6 @@ rabuplot <- function(phylo_ob,
       pval_out <<- pval
       mean_sd <<- molten %>% dplyr::group_by(variable, predictor2) %>% dplyr::summarize( N = length(value),mean = mean(value)*100,sd=sd(value)*100) %>% as.data.frame
     }
-    if(log==FALSE & bar_chart==FALSE) pval$y <- max(molten$value)*1.10
-    if(log==FALSE & bar_chart==TRUE) pval$y <- max(molten_mean$value)*1.20
-    stars.pval <- function (p.value)
-    {    unclass(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**",  "*", "NS")))
-    }
   }
   if(bar_chart==FALSE){
     if(ncol(tax)>=6) molten$value <- molten$value+1e-6 #add pseudocount for log scale 0;
@@ -359,8 +353,6 @@ rabuplot <- function(phylo_ob,
     {if(violin){geom_violin(scale = violin_scale,width = 0.65, position=position_dodge(width=0.9),size=1, color="#00000000")} else {geom_boxplot(width = 0.55, position=position_dodge(width=0.8),size=0.3,outlier.size = 0,outlier.color = "grey")}}+
     {if(violin){stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="black", position=position_dodge(width=0.9))} else {stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="#00000000", position=position_dodge(width=0.9))}}+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),legend.text=element_text(size=12),legend.key.size = unit(0.5, "cm"))+ coord_flip() +xlab(NULL)+ylab(xlabs)+ggtitle(main)
     if(length(unique(molten$variable))>1) p <- p+ geom_vline(xintercept=seq(1.5, length(unique(molten$variable))-0.5, 1),lwd=0.2, colour="grey")
-    if(p_stars==TRUE & p_val==TRUE)
-      p <- p + annotate("text",size=3,hjust=1,fontface="plain", x = pval$variable, y = pval$y,  label=paste(stars.pval(pval$pval)))
 
     p <- p +  scale_fill_manual(values =cols,labels=legend_names) + guides(fill = guide_legend(title=legend_title, reverse = TRUE,override.aes = list(linetype=0, shape=16,color=rev(cols),size=5, bg="white")))
 
@@ -374,8 +366,6 @@ rabuplot <- function(phylo_ob,
       if(!is.null(color_by)) p <-   ggplot(molten_mean,aes(x=type,y=value, fill=colvar,group=wrap))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=ordered2)
       else {
         p <-   ggplot(molten_mean,aes(x=type,y=value, fill=predictor2))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=legend_names)
-        if(p_stars==TRUE & p_val==TRUE)
-          p <- p + annotate("text",size=3,hjust=1,fontface="plain", x = pval$variable, y = pval$y,  label=paste(stars.pval(pval$pval)))
 
       }
       p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ guides(fill = guide_legend(title=legend_title)) + theme(strip.background = element_blank()) +coord_flip()
@@ -387,34 +377,59 @@ rabuplot <- function(phylo_ob,
   if(bar_chart==FALSE) p$layers[4:5] <- NULL
   }
   if(italic_names==TRUE &  (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
-  #  if(!is.null(color_by) & (color_by=="genus" | color_by=="family" | color_by=="species"))
   if(!is.null(color_by)) {
     p <- p + facet_grid(~predictor2, scales = "free", space = "free")
     if(color_by=="genus" | color_by=="family" | color_by=="species") p <- p+ theme(legend.text=element_text(face = "italic"))
   }
-  if(log){
+  if(p_val==TRUE){
+    if(log==FALSE){
+      if(bar_chart==TRUE) pval$y <- max(molten_mean$value)*1.10
+      else pval$y <- max(molten$value)*1.15
+    }
+    else pval$y <-ifelse(log_max==100,10,ifelse(log_max==10,0.126,0.0126))
+    if(p_adjust==TRUE){
+      if(log==FALSE & bar_chart==FALSE) pval$y_adjust <- max(molten$value)*1.20
+      if(log==FALSE & bar_chart==TRUE) pval$y_adjust <- max(molten_mean$value)*1.25
+      if(log==TRUE) pval$y_adjust <- ifelse(log_max==100,105,ifelse(log_max==10,1.26,0.126))
+    }
+  }
+  if(log==TRUE & p_val==FALSE){
     if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1),labels=c("0%","0.1%","1%","10%","100%"))
+    if(log_max == 10)  p <- p+ scale_y_log10(limits=c(0.001,0.13),breaks=c(.001,.01,.05,.1),labels=c("0%","1%","5%","10%"))
+    if(log_max == 1)  p <- p+ scale_y_log10(limits=c(0.001,0.013),breaks=c(.001,.01),labels=c("0%","1%"))
+  }
+  if(log==TRUE & p_val==TRUE){
+    if(p_adjust){
+      if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1,7,70),labels=c("0%","0.1%","1%","10%","100%", "P-value", "q-value"))
+      if(log_max == 10)  p <- p+ scale_y_log10(breaks=c(.001,.01,.05,0.1,0.126,1.26),labels=c("0%","1%","5%","10%", "P-value", "q-value"))
+      if(log_max == 1)  p <- p+ scale_y_log10(breaks=c(.001,.01,0.0126,0.126),labels=c("0%","1%", "P-value", "q-value"))
+    }
     else{
-      if(log_max == 10)  p <- p+ scale_y_log10(limits=c(0.001,0.13),breaks=c(.001,.01,.05,.1),labels=c("0%","1%","5%","10%"))
-      else  p <- p+ scale_y_log10(limits=c(0.001,0.013),breaks=c(.001,.01),labels=c("0%","1%"))
+      if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1,7),labels=c("0%","0.1%","1%","10%","100%", "P-value"))
+      if(log_max == 10)  p <- p+ scale_y_log10(breaks=c(.001,.01,.05,0.10,0.126),labels=c("0%","1%","5%","10%", "P-value"))
+      if(log_max == 1)  p <- p+ scale_y_log10(breaks=c(.001,.01,0.0126),labels=c("0%","1%", "P-value"))
     }
   }
   p <-  p+ theme(plot.background = element_blank(),panel.background = element_blank(),plot.title = element_text(hjust = 0.5))
   if (bar_chart==TRUE & bar_chart_stacked==FALSE  & percent==FALSE) p <- p+ scale_y_continuous(labels = scales::percent)
-  if (bar_chart==TRUE & bar_chart_stacked==FALSE & percent==TRUE) p <- p+  geom_text(aes(label = paste0(sprintf("%.2f",value*100), "%")), hjust = -.12, position=position_dodge(width=0.95))+scale_y_continuous(limits=c(0,max(molten_mean$value)+0.2),labels = scales::percent)
+  if (bar_chart==TRUE & bar_chart_stacked==FALSE & percent==TRUE)  p <- p+  geom_text(aes(label = paste0(sprintf("%.2f",value*100), "%")), hjust = -.12, position=position_dodge(width=0.95))+scale_y_continuous(limits=c(0,max(molten_mean$value)+0.2),labels = scales::percent)
   if(no_legends) p <- p + theme(legend.position="none")
   if(no_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
   # if(!is.null(facet_wrap)) p + guides(fill = guide_legend(title="legend_title", reverse = F))
-  if(p_stars==FALSE & p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))
-    p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval<0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
-  p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval>=0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
-  if(p_adjust){
-    if(stats=="mgs_feature") message(paste("FDR correction applied for",length(unique(mgs_pvalues$variable)),"taxa"))
-    else  message(paste("FDR correction applied for",length(unique(pval$variable)),"taxa"))
-    p <- p + scale_y_log10(breaks=c(.000001,.001,.01,.1,1,10,100),labels=c("0%","0.1%","1%","10%","100%", "P-value", "q-value"))
-    p <- p + geom_text(data=pval,aes(x=variable,y=100,label=ifelse(p_adjust<0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=.5,fontface="bold")
-    p <- p + geom_text(data=pval,aes(x=variable,y=100,label=ifelse(p_adjust>=0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=.5)
+  stars.pval <- function (p.value)
+  {    unclass(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**",  "*", "NS")))
   }
+  if(p_stars==TRUE & p_val==TRUE) p <- p + geom_text(data=pval,aes(x=variable,y=y,label=paste(stars.pval(pval))) ,size=3,hjust=1)
 
+  if(p_stars==FALSE & p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
+    p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval<0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
+    p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval>=0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
+    if(p_adjust){
+      if(stats=="mgs_feature") message(paste("FDR correction applied for",length(unique(mgs_pvalues$variable)),"taxa"))
+      else  message(paste("FDR correction applied for",length(unique(pval$variable)),"taxa"))
+      p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust<0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
+      p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust>=0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
+    }
+  }
   p
 }
