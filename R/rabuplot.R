@@ -29,8 +29,10 @@
 #' @param stat_out Outputs a data.frame with statistics to Global environment; default is FALSE.
 #' @param p_val Displays p-values on plot; default is TRUE.
 #' @param p_stars Shows stars instead of p-values; default is FALSE.
-#' @param stats Select type of statistical test; options "non-parametric", "parametric", "mgs_feature"; defaule is "non-parametric".
-#' @param p_adjust FDR adjust p-values; default is FALSE.
+#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mgs_feature"; default is "non-parametric".
+#' @param p_adjust adjust p-values; default is "FALSE.
+#' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr"; default is "fdr".
+#' @param p_adjust_full correction applied for all taxa; default is FALSE.
 #' @param colors define list of colors for plot. If not color brewer will be used; default is NULL.
 #' @param color_by define taxonomic rank to color by; default is NULL.
 #' @param order Order by abundance, else alphabetically; default is TRUE.
@@ -78,7 +80,9 @@ rabuplot <- function(phylo_ob,
                      p_val = TRUE,
                      p_stars=FALSE,
                      stats="non-parametric",
-                     p_adjust = FALSE,
+                     p_adjust=FALSE,
+                     p_adjust_method="fdr",
+                     p_adjust_full=FALSE,
                      colors=NULL,
                      color_by=NULL,
                      order=TRUE,
@@ -111,7 +115,8 @@ rabuplot <- function(phylo_ob,
   tax$OTU <- rownames(tax)
   samp <- data.frame(sample_data(phylo_ob), stringsAsFactors=TRUE)
   samp <- samp[index,]
-
+  if(is.null(facet_wrap)) samp$wrap <- ""
+  if(!is.null(facet_wrap)) samp$wrap <- samp[,facet_wrap]
   if(!is.null(Timepoint)){
     index <- rownames(samp[(samp[,Time] ==Timepoint),])
     otu_mat <- otu_mat[rownames(otu_mat) %in% index,]
@@ -131,59 +136,8 @@ rabuplot <- function(phylo_ob,
     if(is.array(otu_mat[,list==i]))  abund[,i] <- rowSums(otu_mat[,list== i])
     else   abund[,i] <- otu_mat[,list== i]
   }
-
-  if(stats=="mgs_feature" & p_val==TRUE){
-    if(!is.null(Strata))  {
-      samp2 <- samp[which(samp[,Strata]==Strata_val),]
-      abund2 <- abund[which(samp[,Strata]==Strata_val),]
-      pred <- samp2[,predictor]
-    }
-    else  {
-      samp2 <- samp
-      abund2 <- abund
-      pred <- samp2[,predictor]
-    }
-    if(length(levels(factor(pred)))>2){
-      stats="non-parametric"
-      message("MGS not available for >2 predictors, switching to non-parametric")
-    }
-    if(length(levels(factor(pred)))==2 & is.null(facet_wrap)){
-      # test with featureModel
-      mgs <- metagenomeSeq::newMRexperiment(counts = t(abund2))
-      mgsp <- metagenomeSeq::cumNormStat(mgs)
-      mgs <- metagenomeSeq::cumNorm(mgs, mgsp)
-      mod <- model.matrix(~as.numeric(pred == unique(pred)[1]))
-      message("MGS FeatureModel")
-      mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
-      mgs_pvalues <- data.frame(variable=mgsfit$taxa,pvalues=mgsfit$pvalues) %>% mutate(p_adjust=p.adjust(pvalues, "fdr"))
-    }
-    if(length(levels(factor(pred)))==2 & !is.null(facet_wrap)){
-      mgs_pvalues <- data.frame()
-      for (i in 1:length(unique(samp2[,facet_wrap]))){
-        index <- samp2[,facet_wrap]==unique(samp2[,facet_wrap])[[i]]
-        samp3 <- samp2[index,]
-        abund3 <- abund2[index,]
-        pred <- samp3[,predictor]
-        # test with featureModel
-        mgs <- metagenomeSeq::newMRexperiment(counts = t(abund3))
-        mgsp <- metagenomeSeq::cumNormStat(mgs)
-        mgs <- metagenomeSeq::cumNorm(mgs, mgsp)
-        mod <- model.matrix(~as.numeric(pred == unique(pred)[1]))
-        message(paste0("MGS FeatureModel for facet_wrap = ",unique(samp2[,facet_wrap])[[i]]))
-        mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
-        pval_tmp <- data.frame(variable=mgsfit$taxa,pvalues=mgsfit$pvalues,wrap=unique(samp2[,facet_wrap])[[i]]) %>% mutate(p_adjust=p.adjust(pvalues, "fdr"))
-        mgs_pvalues <- rbind(mgs_pvalues,pval_tmp)
-      }
-    }
-  }
-  #Sort by abundance
-  abund$"reads" <- rowSums(abund)
-  if(relative_abun){
-    for(i in names(abund)){
-      abund[,i] <- abund[,i] / abund$"reads"
-    }
-  }
-  abund$"reads" <- NULL
+  abund_org <- abund
+  if(relative_abun==TRUE) abund <- apply(abund,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
 
   if (is.null(list_taxa) & !is.null(select_taxa))  list_taxa <- as.character(unique(tax[grep(select_taxa,tax[,select_type],ignore.case=TRUE),type]))
 
@@ -191,8 +145,9 @@ rabuplot <- function(phylo_ob,
     abund <- abund[,colnames(abund) %in% list_taxa, drop = FALSE]
     unique_tax <- names(abund)
   }
-  index <- !is.na(rownames(samp))
+
   if(length(abund)>1){
+    index <- !is.na(rownames(samp))
     if (!is.null(order_val))  index <- samp[,order_by] ==order_val
     abund <- abund[,order(-colSums(abund[index,]))]
     if (By_median)  abund <- abund[,order(-apply(abund[index,], 2, median))]
@@ -201,9 +156,61 @@ rabuplot <- function(phylo_ob,
       abund[,paste("Other",type)] <- rowSums(abund[(length(unique_tax)-(length(unique_tax)-N_taxa)+1):length(unique_tax)])
       abund <- abund[-(length(unique_tax)-(length(unique_tax)-N_taxa)+1):-length(unique_tax)]
     }
-
     if(no_other_type)  abund[,paste("Other",type)] <- NULL
   }
+
+  if(p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
+    index <- !is.na(rownames(samp))
+    if(!is.null(Strata)) index <- samp[,Strata]==Strata_val
+    samp2 <- samp[index,]
+    if(p_adjust_full ==TRUE | stats=="mgs_feature"){
+      abund2 <- abund_org[index,]
+      if(relative_abun==TRUE & stats!="mgs_feature") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
+    }
+    else abund2 <- abund[index,]
+    pred <- samp2[,predictor]
+
+    if(stats=="mgs_feature" & length(levels(factor(pred)))>2){
+      stats="non-parametric"
+      message("MGS not available for >2 predictors, switching to non-parametric")
+    }
+    pval <- data.frame()
+    for (i in 1:length(unique(samp2$wrap))){
+      index <- samp2$wrap==unique(samp2$wrap)[[i]]
+      abund3 <- abund2[index,]
+      pred <- samp2[index,predictor]
+      # test with featureModel
+      if(stats=="mgs_feature"){
+        mgs <- metagenomeSeq::newMRexperiment(counts = t(abund3))
+        mgsp <- metagenomeSeq::cumNormStat(mgs)
+        mgs <- metagenomeSeq::cumNorm(mgs, mgsp)
+        mod <- model.matrix(~as.numeric(pred == unique(pred)[1]))
+        if(length(unique(samp2$wrap))>1) message(paste0("MGS FeatureModel for facet_wrap = ",unique(samp2$wrap)[[i]]))
+        else message("MGS FeatureModel")
+        mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
+        pval_tmp <- data.frame(variable=mgsfit$taxa,pval=mgsfit$pvalues)
+      }
+      if(stats=="non-parametric"){   #Kruskal-Wallis
+        if(i==1) message("Non-parametric")
+        pval_tmp <- cbind(abund3,pred) %>% as_tibble() %>%
+          gather(variable, value,-"pred") %>%
+          group_by(variable) %>%
+          summarize(pval = kruskal.test(value ~ pred)$p.value, .groups = 'drop')
+      }
+      if(stats=="parametric"){
+        if(i==1) message("Parametric")
+        pval_tmp <- cbind(abund3,pred) %>% as_tibble() %>%
+          gather(variable, value,-"pred") %>%
+          group_by(variable) %>%
+          summarize(pval = oneway.test(value ~ pred)$p.value, .groups = 'drop')
+      }
+      pval_tmp <- pval_tmp %>%
+        mutate(wrap=unique(samp2$wrap)[[i]],p_adjust=p.adjust(pval, p_adjust_method))
+      pval <- rbind(pval,pval_tmp)
+    }
+    if(p_adjust) message(paste(p_adjust_method,"correction applied for",length(unique(pval$variable)),"taxa"))
+  }
+
   bacteria <- rev(names(abund))
   subset <- cbind(samp[!names(samp) %in% bacteria], abund) #fjerner evt eksisterende navne fra dataset og merger;
   subset$predictor2 <-  as.factor(subset[,predictor])
@@ -229,8 +236,8 @@ rabuplot <- function(phylo_ob,
 
   molten$variable <- gsub('_',' ',molten$variable)
 
-  if(order)   ordered<- unique(molten$variable) #level order
-  if(!order)   ordered<-sort(unique(molten$variable))#level order alphabetically
+  if(order)   ordered <- unique(molten$variable) #level order
+  if(!order)   ordered <-sort(unique(molten$variable))#level order alphabetically
 
   molten$variable <- factor(molten$variable, levels=ordered)
   if(is.null(color_by))  molten$colvar <- molten$variable
@@ -281,52 +288,17 @@ rabuplot <- function(phylo_ob,
     molten_mean$colvar <- factor(molten_mean$colvar, levels=ordered2)
 
   }
-
   #Calculate pvalue for outcomes
   if(p_val==TRUE & ((bar_chart==TRUE & bar_chart_stacked==FALSE) | bar_chart==FALSE) & is.null(color_by)){
     if(is.null(facet_wrap)) molten$wrap <- ""
-    if(stats=="mgs_feature"){
-      if(!is.null(facet_wrap)) {
-        pval <- data.frame(pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues,p_adjust=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable),wrap=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$wrap)
-      }
-      else {
-        pval <- data.frame(pval=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$pvalues,p_adjust=mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',mgs_pvalues[gsub('_',' ',mgs_pvalues$variable) %in% ordered,]$variable))
-        if(length(pval$variable)-length(ordered)<0) pval <- pval[match(pval$variable,ordered[length(pval$variable)-length(ordered)]),]
-      }
+    if(!is.null(facet_wrap)) {
+      pval <- data.frame(pval=pval[gsub('_',' ',pval$variable) %in% ordered,]$pval,p_adjust=pval[gsub('_',' ',pval$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',pval[gsub('_',' ',pval$variable) %in% ordered,]$variable),wrap=pval[gsub('_',' ',pval$variable) %in% ordered,]$wrap)
     }
-    if(stats=="non-parametric"){
-      if(length(levels(subset$predictor2))>2) {#Kruskal-Wallis for more than 2 groups
-        pval <- data.frame()
-        for (i in 1:length(unique(molten$wrap)))
-        {
-          test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
-          pval_tmp<- data.frame(pval=sapply(split(test, test$variable) , function(x) kruskal.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))%>% mutate(p_adjust=p.adjust(pval, "fdr"))
-          pval <- rbind(pval,pval_tmp)
-        }
-      }
-      if(length(levels(subset$predictor2))==2) {  #Wilcoxon
-        pval <- data.frame()
-        for (i in 1:length(unique(molten$wrap)))
-        {
-          test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
-          pval_tmp<- data.frame(pval=sapply(split(test, test$variable) , function(x) wilcox.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap))%>% mutate(p_adjust=p.adjust(pval, "fdr"))
-          pval <- rbind(pval,pval_tmp)
-        }
-      }
-      message("Non-parametric")
-    }
-    if(stats=="parametric") {
-      pval <- data.frame()
-      for (i in 1:length(unique(molten$wrap)))
-      {
-        test <- molten[molten$wrap==unique(molten$wrap)[[i]],]
-        pval_tmp<- data.frame(pval=sapply(split(test, test$variable) , function(x) oneway.test(value ~ predictor2, x)$p.value),variable=factor(paste(ordered)),wrap=unique(test$wrap)) %>% mutate(p_adjust=p.adjust(pval, "fdr"))
-        pval <- rbind(pval,pval_tmp)
-      }
-      message("Parametric")
+    else {
+      pval <- data.frame(pval=pval[gsub('_',' ',pval$variable) %in% ordered,]$pval,p_adjust=pval[gsub('_',' ',pval$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',pval[gsub('_',' ',pval$variable) %in% ordered,]$variable))
+      if(length(pval$variable)-length(ordered)<0) pval <- pval[match(pval$variable,ordered[length(pval$variable)-length(ordered)]),]
     }
     pval$predictor2 <- molten$predictor2[1]
-    #  pval$pval = p.adjust(pval$pval, "fdr")
     pval$pval <- ifelse(is.na(pval$pval),1,pval$pval)
     pval$p_adjust <- ifelse(is.na(pval$p_adjust),1,pval$p_adjust)
     if(Only_sig){
@@ -335,8 +307,8 @@ rabuplot <- function(phylo_ob,
       pval <- pval[pval$pval<0.05,]
     }
     if (!is.null(list_type)){
-      molten <- molten[molten$variable  %in% list_type,]
-      pval <-    pval[pval$variable  %in% list_type,]
+      molten <- molten[molten$variable %in% list_type,]
+      pval <-    pval[pval$variable %in% list_type,]
     }
 
     if(stat_out){
@@ -388,34 +360,42 @@ rabuplot <- function(phylo_ob,
     }
     else pval$y <-ifelse(log_max==100,10,ifelse(log_max==10,0.126,0.0126))
     if(p_adjust==TRUE){
-      if(log==FALSE & bar_chart==FALSE) pval$y_adjust <- max(molten$value)*1.20
+      if(log==FALSE & bar_chart==FALSE) pval$y_adjust <- 1.22
       if(log==FALSE & bar_chart==TRUE) pval$y_adjust <- max(molten_mean$value)*1.25
       if(log==TRUE) pval$y_adjust <- ifelse(log_max==100,105,ifelse(log_max==10,1.26,0.126))
     }
   }
-  if(log==TRUE & p_val==FALSE){
-    if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1),labels=c("0%","0.1%","1%","10%","100%"))
-    if(log_max == 10)  p <- p+ scale_y_log10(limits=c(0.001,0.13),breaks=c(.001,.01,.05,.1),labels=c("0%","1%","5%","10%"))
-    if(log_max == 1)  p <- p+ scale_y_log10(limits=c(0.001,0.013),breaks=c(.001,.01),labels=c("0%","1%"))
-  }
-  if(log==TRUE & p_val==TRUE){
-    if(p_adjust){
-      if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1,7,70),labels=c("0%","0.1%","1%","10%","100%", "P-value", "q-value"))
-      if(log_max == 10)  p <- p+ scale_y_log10(breaks=c(.001,.01,.05,0.1,0.126,1.26),labels=c("0%","1%","5%","10%", "P-value", "q-value"))
-      if(log_max == 1)  p <- p+ scale_y_log10(breaks=c(.001,.01,0.0126,0.126),labels=c("0%","1%", "P-value", "q-value"))
+  if(log==TRUE){
+    if(p_val==FALSE){
+      if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1),labels=c("0%","0.1%","1%","10%","100%"))
+      if(log_max == 10)  p <- p+ scale_y_log10(limits=c(0.001,0.13),breaks=c(.001,.01,.05,.1),labels=c("0%","1%","5%","10%"))
+      if(log_max == 1)  p <- p+ scale_y_log10(limits=c(0.001,0.013),breaks=c(.001,.01),labels=c("0%","1%"))
     }
-    else{
-      if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1,7),labels=c("0%","0.1%","1%","10%","100%", "P-value"))
-      if(log_max == 10)  p <- p+ scale_y_log10(breaks=c(.001,.01,.05,0.10,0.126),labels=c("0%","1%","5%","10%", "P-value"))
-      if(log_max == 1)  p <- p+ scale_y_log10(breaks=c(.001,.01,0.0126),labels=c("0%","1%", "P-value"))
+    if(p_val==TRUE){
+      if(p_adjust){
+        if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1,7,70),labels=c("0%","0.1%","1%","10%","100%", "P-value", "q-value"))
+        if(log_max == 10)  p <- p+ scale_y_log10(breaks=c(.001,.01,.05,0.1,0.126,1.26),labels=c("0%","1%","5%","10%", "P-value", "q-value"))
+        if(log_max == 1)  p <- p+ scale_y_log10(breaks=c(.001,.01,0.0126,0.126),labels=c("0%","1%", "P-value", "q-value"))
+      }
+      else{
+        if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1,7),labels=c("0%","0.1%","1%","10%","100%", "P-value"))
+        if(log_max == 10)  p <- p+ scale_y_log10(breaks=c(.001,.01,.05,0.10,0.126),labels=c("0%","1%","5%","10%", "P-value"))
+        if(log_max == 1)  p <- p+ scale_y_log10(breaks=c(.001,.01,0.0126),labels=c("0%","1%", "P-value"))
+      }
     }
   }
+  if(log==FALSE){
+    if(p_val==FALSE) p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1),labels=c("0%","25%","50%","75%","100%"))
+    if(p_val==TRUE){
+      if(p_adjust==TRUE) p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,1.12,1.20),labels=c("0%","25%","50%","75%","100%", "P-value", "q-value"))
+      if(p_adjust==FALSE) p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,1.12),labels=c("0%","25%","50%","75%","100%", "P-value"))
+    }
+  }
+
   p <-  p+ theme(plot.background = element_blank(),panel.background = element_blank(),plot.title = element_text(hjust = 0.5))
-  if (bar_chart==TRUE & bar_chart_stacked==FALSE  & percent==FALSE) p <- p+ scale_y_continuous(labels = scales::percent)
   if (bar_chart==TRUE & bar_chart_stacked==FALSE & percent==TRUE)  p <- p+  geom_text(aes(label = paste0(sprintf("%.2f",value*100), "%")), hjust = -.12, position=position_dodge(width=0.95))+scale_y_continuous(limits=c(0,max(molten_mean$value)+0.2),labels = scales::percent)
   if(no_legends) p <- p + theme(legend.position="none")
   if(no_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
-  # if(!is.null(facet_wrap)) p + guides(fill = guide_legend(title="legend_title", reverse = F))
   stars.pval <- function (p.value)
   {    unclass(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**",  "*", "NS")))
   }
@@ -425,8 +405,6 @@ rabuplot <- function(phylo_ob,
     p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval<0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
     p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval>=0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
     if(p_adjust){
-      if(stats=="mgs_feature") message(paste("FDR correction applied for",length(unique(mgs_pvalues$variable)),"taxa"))
-      else  message(paste("FDR correction applied for",length(unique(pval$variable)),"taxa"))
       p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust<0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
       p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust>=0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
     }

@@ -34,6 +34,8 @@ rabuplot(
   p_stars = FALSE,
   stats = "non-parametric",
   p_adjust = FALSE,
+  p_adjust_method = "fdr",
+  p_adjust_full = FALSE,
   colors = NULL,
   color_by = NULL,
   order = TRUE,
@@ -97,7 +99,7 @@ rabuplot(
 
 \item{log}{Present plot on a log scale; default is TRUE.}
 
-\item{log_max}{Maximum value of log-axis; default is 100.}
+\item{log_max}{Maximum value of log-axis options:1, 10, 100; default is 100.}
 
 \item{stat_out}{Outputs a data.frame with statistics to Global environment; default is FALSE.}
 
@@ -105,9 +107,13 @@ rabuplot(
 
 \item{p_stars}{Shows stars instead of p-values; default is FALSE.}
 
-\item{stats}{Select type of statistical test; options "non-parametric", "parametric", "mgs_feature"; defaule is "non-parametric".}
+\item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mgs_feature"; default is "non-parametric".}
 
-\item{p_adjust}{FDR adjust p-values; default is FALSE.}
+\item{p_adjust}{adjust p-values; default is "FALSE.}
+
+\item{p_adjust_method}{options: "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr"; default is "fdr".}
+
+\item{p_adjust_full}{correction applied for all taxa; default is FALSE.}
 
 \item{colors}{define list of colors for plot. If not color brewer will be used; default is NULL.}
 
