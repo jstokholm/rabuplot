@@ -302,7 +302,7 @@ rabuplot <- function(phylo_ob,
     pval$pval <- ifelse(is.na(pval$pval),1,pval$pval)
     pval$p_adjust <- ifelse(is.na(pval$p_adjust),1,pval$p_adjust)
     if(Only_sig){
-      index <- rownames(pval[pval$pval<0.05,])
+      index <- pval[pval$pval<0.05,"variable"]
       molten <- molten[molten$variable %in% index,]
       pval <- pval[pval$pval<0.05,]
     }
