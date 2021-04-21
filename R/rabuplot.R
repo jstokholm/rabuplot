@@ -100,7 +100,8 @@ rabuplot <- function(phylo_ob,
 {
 
   phylo_ob <- prune_samples(sample_sums(phylo_ob)>0,phylo_ob) #removes empty samples;
-  otu_mat <- t(as(otu_table(phylo_ob), "matrix"))
+  otu_mat <- as(otu_table(phylo_ob), "matrix")
+  if(taxa_are_rows(phylo_ob)) otu_mat <- t(otu_mat)
   if(!is.null(facet_wrap)) index <- !is.na(get_variable(phylo_ob, predictor)) & !is.na(get_variable(phylo_ob, facet_wrap))
   else   index <- !is.na(get_variable(phylo_ob, predictor))
   if(length(unique(index)) !=1) message("NAs have been removed for predictor/facet_wrap variable(s)")
