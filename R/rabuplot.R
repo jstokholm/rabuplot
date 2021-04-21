@@ -111,6 +111,7 @@ rabuplot <- function(phylo_ob,
   tax <- as(tax_table(phylo_ob), "matrix") %>% data.frame(stringsAsFactors=FALSE)
   tax <- tax[rownames(tax) %in% OTU_index,]
   tax[is.na(tax)] <- "unclassified"
+  tax[tax==""] <- "unclassified"
   names(tax) <- tolower(names(tax))
   type <- tolower(type)
   tax$OTU <- rownames(tax)
