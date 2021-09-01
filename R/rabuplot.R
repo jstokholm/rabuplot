@@ -141,8 +141,12 @@ rabuplot <- function(phylo_ob,
   abund_org <- abund
   if(relative_abun==TRUE) abund <- apply(abund,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
 
-  if (is.null(list_taxa) & !is.null(select_taxa))  list_taxa <- as.character(unique(tax[grep(select_taxa,tax[,select_type],ignore.case=TRUE),type]))
-
+  if (is.null(list_taxa) & !is.null(select_taxa)) {
+    list_taxa <- NULL
+    for(i in 1:length(select_taxa)){
+      list_taxa <- c(list_taxa,(as.character(unique(tax[grep(select_taxa[[i]],tax[,select_type],ignore.case=TRUE),type]))))
+    }
+  }
   if (!is.null(list_taxa)) {
     abund <- abund[,colnames(abund) %in% list_taxa, drop = FALSE]
     unique_tax <- names(abund)
