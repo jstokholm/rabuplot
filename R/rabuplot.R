@@ -39,7 +39,7 @@
 #' @param reverse Flip taxa order; default is FALSE.
 #' @param list_taxa A list of specific taxa names to be analyzed; default is NULL.
 #' @param list_type Taxonomic rank of the @list_taxa; default is NULL.
-#' @param select_taxa Choose all taxa from a Taxonomic variable, eg. "Staphylocuccus" or "Staph" or "cuccus"; default is NULL.
+#' @param select_taxa Choose all taxa from one or more Taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.
 #' @param select_type Taxonomic rank of the @select_taxa; default is NULL.
 #' @param bar_chart Choose to make bar chart; default is FALSE.
 #' @param bar_chart_stacked Produce stacked bar chart, when @bar_chart is TRUE; default is TRUE.

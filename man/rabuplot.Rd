@@ -127,7 +127,7 @@ rabuplot(
 
 \item{list_type}{Taxonomic rank of the @list_taxa; default is NULL.}
 
-\item{select_taxa}{Choose all taxa from a Taxonomic variable, eg. "Staphylocuccus" or "Staph" or "cuccus"; default is NULL.}
+\item{select_taxa}{Choose all taxa from one or more Taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.}
 
 \item{select_type}{Taxonomic rank of the @select_taxa; default is NULL.}
 
