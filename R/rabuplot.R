@@ -113,7 +113,7 @@ rabuplot <- function(phylo_ob,
   if(taxa_are_rows(phylo_ob)) otu_mat <- t(otu_mat)
   if(!is.null(facet_wrap)) index <- !is.na(get_variable(phylo_ob, predictor)) & !is.na(get_variable(phylo_ob, facet_wrap))
   else   index <- !is.na(get_variable(phylo_ob, predictor))
-  if(length(unique(index)) !=1) message(paste(length(which(index==F)), "samples have been removed for predictor/facet_wrap NA(s)"))
+  if(length(unique(index)) !=1) message(paste(length(which(index==F)), "samples have been removed from total dataset (predictor/facet_wrap NAs)"))
   otu_mat <- otu_mat[index,]
   otu_mat  <- otu_mat[,colSums(otu_mat)>0] #removes empty OTUs;
   OTU_index <- colnames(otu_mat)
@@ -234,13 +234,13 @@ rabuplot <- function(phylo_ob,
   if(!is.null(facet_wrap)){
     subset$wrap <-  as.factor(subset[,facet_wrap])
     if(!is.null(Strata))
-      molten <- subset[,c("ID",paste(bacteria),"predictor2",Strata,"wrap")] %>% gather(variable, value,-"predictor2",-"ID",-Strata,-"wrap")
+      molten <- subset[,c("ID",paste(bacteria),"predictor2",Strata,"wrap")] %>% gather(variable, value,-"predictor2",-"ID",-all_of(Strata),-"wrap")
     else
       molten <- subset[,c("ID",paste(bacteria),"predictor2","wrap")] %>% gather(variable, value,-"predictor2",-"ID",-"wrap")
   }
   if(is.null(facet_wrap)){
     if(!is.null(Strata))
-      molten <- subset[,c("ID",paste(bacteria),"predictor2",Strata)] %>% gather(variable, value,-"predictor2",-"ID",-Strata)
+      molten <- subset[,c("ID",paste(bacteria),"predictor2",Strata)] %>% gather(variable, value,-"predictor2",-"ID",-all_of(Strata))
     else
       molten <- subset[,c("ID",paste(bacteria),"predictor2")] %>% gather(variable, value,-"predictor2",-"ID")
   }
