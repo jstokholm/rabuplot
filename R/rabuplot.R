@@ -3,7 +3,7 @@
 #' For creating nice microbiome plots
 #'
 #' @param phylo_ob Phyloseq object with metadata in sample_data.
-#' @param predictor Predictor of interestfor stastics/plotting in sample_data.
+#' @param predictor Predictor of interest for statistics/plotting in sample_data.
 #' @param type Taxonomic rank from tax_table, case insensitive; default is "genus".
 #' @param relative_abun Use relative abundances, else absolute; default is TRUE.
 #' @param xlabs X-axis label
@@ -42,7 +42,7 @@
 #' @param select_taxa Choose all taxa from one or more Taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.
 #' @param select_type Taxonomic rank of the @select_taxa; default is NULL.
 #' @param bar_chart Choose to make bar chart; default is FALSE.
-#' @param bar_chart_stacked Produce stacked bar chart, when @bar_chart is TRUE; default is TRUE.
+#' @param bar_chart_stacked Produce stacked bar chart; default is FALSE
 #' @param percent Print percentages on bar chart; default is FALSE.
 #' @param facet_wrap Facet wrap chart by variable; eg. Time; default is NULL.
 #' @param order_by Choose variable to order the selected taxa by; eg. Time; default is Time.
@@ -53,7 +53,7 @@
 #' @export
 
 rabuplot <- function(phylo_ob,
-                     predictor,
+                     predictor="none",
                      type="genus",
                      relative_abun=TRUE,
                      xlabs = "Relative abundance (%)",
@@ -92,19 +92,28 @@ rabuplot <- function(phylo_ob,
                      select_taxa=NULL,
                      select_type=NULL,
                      bar_chart=FALSE,
-                     bar_chart_stacked=TRUE,
+                     bar_chart_stacked=FALSE,
                      facet_wrap=NULL,
                      percent=FALSE,
                      order_by="Time",
                      order_val=NULL)
 {
-
+  options(dplyr.summarise.inform = FALSE)
+  if(bar_chart_stacked==TRUE & bar_chart==FALSE) {
+    bar_chart=TRUE
+    p_val=FALSE
+  }
+  if(predictor=="none") {
+    sample_data(phylo_ob)$none <- "All samples"
+    p_val=FALSE
+    if(bar_chart_stacked==FALSE) no_legends = TRUE
+  }
   phylo_ob <- prune_samples(sample_sums(phylo_ob)>0,phylo_ob) #removes empty samples;
   otu_mat <- as(otu_table(phylo_ob), "matrix")
   if(taxa_are_rows(phylo_ob)) otu_mat <- t(otu_mat)
   if(!is.null(facet_wrap)) index <- !is.na(get_variable(phylo_ob, predictor)) & !is.na(get_variable(phylo_ob, facet_wrap))
   else   index <- !is.na(get_variable(phylo_ob, predictor))
-  if(length(unique(index)) !=1) message("NAs have been removed for predictor/facet_wrap variable(s)")
+  if(length(unique(index)) !=1) message(paste(length(which(index==F)), "samples have been removed for predictor/facet_wrap NA(s)"))
   otu_mat <- otu_mat[index,]
   otu_mat  <- otu_mat[,colSums(otu_mat)>0] #removes empty OTUs;
   OTU_index <- colnames(otu_mat)
@@ -282,15 +291,10 @@ rabuplot <- function(phylo_ob,
     if(!is.null(colors)) cols <- colors
     if(is.null(color_by) & reverse==FALSE) cols <- rev(cols)
     if(!is.null(color_by) & reverse==TRUE) cols <- rev(cols)
-    if(!is.null(facet_wrap)){
-      molten_mean <- aggregate(molten$value,by=list(molten$variable, molten$predictor2, molten$wrap, molten$colvar),FUN=mean)
-      names(molten_mean) <- c("type", "predictor2","wrap","colvar", "value")
-    }
-    if(is.null(facet_wrap)){
-      molten_mean <- aggregate(molten$value,by=list(molten$variable, molten$predictor2,molten$colvar),FUN=mean)
-      names(molten_mean) <- c("type", "predictor2","colvar", "value")
-      molten_mean$wrap <- ""
-    }
+    if(is.null(facet_wrap))  molten$wrap <- ""
+    molten_mean <- molten %>%
+        dplyr::group_by(variable,predictor2,wrap,colvar) %>%
+        dplyr::summarize(value = mean(value))
     molten_mean$colvar <- factor(molten_mean$colvar, levels=ordered2)
 
   }
@@ -339,11 +343,11 @@ rabuplot <- function(phylo_ob,
     #   ordered  <- paste0(ordered, '   ')  #For legends in one line.
     #    ordered[length(ordered)]  <- paste0(ordered[length(ordered)], '             ')
     if(bar_chart_stacked==TRUE)
-      p <-  ggplot(molten_mean,aes(x=factor(predictor2,labels=legend_names),y=value, fill=type)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=legend_title))+ scale_y_continuous(labels = scales::percent)
+      p <-  ggplot(molten_mean,aes(x=factor(predictor2,labels=legend_names),y=value, fill=variable)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
     if(bar_chart_stacked==FALSE){
-      if(!is.null(color_by)) p <-   ggplot(molten_mean,aes(x=type,y=value, fill=colvar,group=wrap))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=ordered2)
+      if(!is.null(color_by)) p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=colvar,group=wrap))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=ordered2)
       else {
-        p <-   ggplot(molten_mean,aes(x=type,y=value, fill=predictor2))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=legend_names)
+        p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=predictor2))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=legend_names)
 
       }
       p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ guides(fill = guide_legend(title=legend_title)) + theme(strip.background = element_blank()) +coord_flip()
@@ -417,3 +421,4 @@ rabuplot <- function(phylo_ob,
   }
   p
 }
+

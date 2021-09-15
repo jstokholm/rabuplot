@@ -6,7 +6,7 @@
 \usage{
 rabuplot(
   phylo_ob,
-  predictor,
+  predictor = "none",
   type = "genus",
   relative_abun = TRUE,
   xlabs = "Relative abundance (\%)",
@@ -45,7 +45,7 @@ rabuplot(
   select_taxa = NULL,
   select_type = NULL,
   bar_chart = FALSE,
-  bar_chart_stacked = TRUE,
+  bar_chart_stacked = FALSE,
   facet_wrap = NULL,
   percent = FALSE,
   order_by = "Time",
@@ -55,7 +55,7 @@ rabuplot(
 \arguments{
 \item{phylo_ob}{Phyloseq object with metadata in sample_data.}
 
-\item{predictor}{Predictor of interestfor stastics/plotting in sample_data.}
+\item{predictor}{Predictor of interest for statistics/plotting in sample_data.}
 
 \item{type}{Taxonomic rank from tax_table, case insensitive; default is "genus".}
 
@@ -133,7 +133,7 @@ rabuplot(
 
 \item{bar_chart}{Choose to make bar chart; default is FALSE.}
 
-\item{bar_chart_stacked}{Produce stacked bar chart, when @bar_chart is TRUE; default is TRUE.}
+\item{bar_chart_stacked}{Produce stacked bar chart; default is FALSE}
 
 \item{facet_wrap}{Facet wrap chart by variable; eg. Time; default is NULL.}
 
