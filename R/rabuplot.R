@@ -38,7 +38,6 @@
 #' @param order Order by abundance, else alphabetically; default is TRUE.
 #' @param reverse Flip taxa order; default is FALSE.
 #' @param list_taxa A list of specific taxa names to be analyzed; default is NULL.
-#' @param list_type Taxonomic rank of the @list_taxa; default is NULL.
 #' @param select_taxa Choose all taxa from one or more taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.
 #' @param select_type Taxonomic rank of the @select_taxa; default is "genus".
 #' @param bar_chart Choose to make bar chart; default is FALSE.
@@ -88,7 +87,6 @@ rabuplot <- function(phylo_ob,
                      order=TRUE,
                      reverse=FALSE,
                      list_taxa=NULL,
-                     list_type=NULL,
                      select_taxa=NULL,
                      select_type="genus",
                      bar_chart=FALSE,
@@ -316,10 +314,6 @@ rabuplot <- function(phylo_ob,
       molten <- molten[molten$variable %in% index,]
       pval <- pval[pval$pval<0.05,]
     }
-    if (!is.null(list_type)){
-      molten <- molten[molten$variable %in% list_type,]
-      pval <-    pval[pval$variable %in% list_type,]
-    }
 
     if(stat_out){
       median_iqr <<- molten %>% dplyr::group_by(variable, predictor2) %>% dplyr::summarize( N = length(value),median = median(value)*100,Q1=quantile(value, 1/4)*100,Q3=quantile(value, 3/4)*100, IQR = IQR(value)) %>% as.data.frame
@@ -340,8 +334,6 @@ rabuplot <- function(phylo_ob,
 
   }
   if(bar_chart==TRUE){
-    #   ordered  <- paste0(ordered, '   ')  #For legends in one line.
-    #    ordered[length(ordered)]  <- paste0(ordered[length(ordered)], '             ')
     if(bar_chart_stacked==TRUE)
       p <-  ggplot(molten_mean,aes(x=factor(predictor2,labels=legend_names),y=value, fill=variable)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
     if(bar_chart_stacked==FALSE){

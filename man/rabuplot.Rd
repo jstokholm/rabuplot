@@ -41,7 +41,6 @@ rabuplot(
   order = TRUE,
   reverse = FALSE,
   list_taxa = NULL,
-  list_type = NULL,
   select_taxa = NULL,
   select_type = "genus",
   bar_chart = FALSE,
@@ -124,8 +123,6 @@ rabuplot(
 \item{reverse}{Flip taxa order; default is FALSE.}
 
 \item{list_taxa}{A list of specific taxa names to be analyzed; default is NULL.}
-
-\item{list_type}{Taxonomic rank of the @list_taxa; default is NULL.}
 
 \item{select_taxa}{Choose all taxa from one or more taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.}
 
