@@ -40,7 +40,7 @@
 #' @param list_taxa A list of specific taxa names to be analyzed; default is NULL.
 #' @param list_type Taxonomic rank of the @list_taxa; default is NULL.
 #' @param select_taxa Choose all taxa from one or more Taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.
-#' @param select_type Taxonomic rank of the @select_taxa; default is NULL.
+#' @param select_type Taxonomic rank of the @select_taxa; default is "genus".
 #' @param bar_chart Choose to make bar chart; default is FALSE.
 #' @param bar_chart_stacked Produce stacked bar chart; default is FALSE
 #' @param percent Print percentages on bar chart; default is FALSE.
@@ -90,7 +90,7 @@ rabuplot <- function(phylo_ob,
                      list_taxa=NULL,
                      list_type=NULL,
                      select_taxa=NULL,
-                     select_type=NULL,
+                     select_type="genus",
                      bar_chart=FALSE,
                      bar_chart_stacked=FALSE,
                      facet_wrap=NULL,
@@ -123,6 +123,7 @@ rabuplot <- function(phylo_ob,
   tax[tax==""] <- "unclassified"
   names(tax) <- tolower(names(tax))
   type <- tolower(type)
+  if(!is.null(select_type)) select_type <- tolower(select_type)
   tax$OTU <- rownames(tax)
   samp <- data.frame(sample_data(phylo_ob), stringsAsFactors=TRUE)
   samp <- samp[index,]
