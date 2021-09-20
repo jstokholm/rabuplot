@@ -61,7 +61,7 @@ rabuplot <- function(phylo_ob,
                      violin=TRUE,
                      violin_scale = "width",
                      legend_title=predictor,
-                     N_taxa=15,
+                     N_taxa=NULL,
                      By_median=TRUE,
                      no_other_type=FALSE,
                      legend_names=NULL,
@@ -96,6 +96,8 @@ rabuplot <- function(phylo_ob,
                      order_by="Time",
                      order_val=NULL)
 {
+  if(!is.null(list_taxa) & is.null(N_taxa)) N_taxa = length(list_taxa)
+  if(is.null(N_taxa)) N_taxa=15
   options(dplyr.summarise.inform = FALSE)
   if(bar_chart_stacked==TRUE & bar_chart==FALSE) {
     bar_chart=TRUE

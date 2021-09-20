@@ -15,7 +15,7 @@ rabuplot(
   violin = TRUE,
   violin_scale = "width",
   legend_title = predictor,
-  N_taxa = 15,
+  N_taxa = NULL,
   By_median = TRUE,
   no_other_type = FALSE,
   legend_names = NULL,
