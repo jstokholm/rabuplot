@@ -43,7 +43,7 @@ rabuplot(
   list_taxa = NULL,
   list_type = NULL,
   select_taxa = NULL,
-  select_type = NULL,
+  select_type = "genus",
   bar_chart = FALSE,
   bar_chart_stacked = FALSE,
   facet_wrap = NULL,
@@ -113,7 +113,7 @@ rabuplot(
 
 \item{p_adjust_method}{options: "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr"; default is "fdr".}
 
-\item{p_adjust_full}{correction applied for all taxa; default is FALSE.}
+\item{p_adjust_full}{correction applied for all taxa in the dataset; default is FALSE.}
 
 \item{colors}{define list of colors for plot. If not color brewer will be used; default is NULL.}
 
@@ -127,9 +127,9 @@ rabuplot(
 
 \item{list_type}{Taxonomic rank of the @list_taxa; default is NULL.}
 
-\item{select_taxa}{Choose all taxa from one or more Taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.}
+\item{select_taxa}{Choose all taxa from one or more taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.}
 
-\item{select_type}{Taxonomic rank of the @select_taxa; default is NULL.}
+\item{select_type}{Taxonomic rank of the @select_taxa; default is "genus".}
 
 \item{bar_chart}{Choose to make bar chart; default is FALSE.}
 

@@ -32,14 +32,14 @@
 #' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mgs_feature"; default is "non-parametric".
 #' @param p_adjust adjust p-values; default is "FALSE.
 #' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr"; default is "fdr".
-#' @param p_adjust_full correction applied for all taxa; default is FALSE.
+#' @param p_adjust_full correction applied for all taxa in the dataset; default is FALSE.
 #' @param colors define list of colors for plot. If not color brewer will be used; default is NULL.
 #' @param color_by define taxonomic rank to color by; default is NULL.
 #' @param order Order by abundance, else alphabetically; default is TRUE.
 #' @param reverse Flip taxa order; default is FALSE.
 #' @param list_taxa A list of specific taxa names to be analyzed; default is NULL.
 #' @param list_type Taxonomic rank of the @list_taxa; default is NULL.
-#' @param select_taxa Choose all taxa from one or more Taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.
+#' @param select_taxa Choose all taxa from one or more taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.
 #' @param select_type Taxonomic rank of the @select_taxa; default is "genus".
 #' @param bar_chart Choose to make bar chart; default is FALSE.
 #' @param bar_chart_stacked Produce stacked bar chart; default is FALSE
@@ -113,7 +113,7 @@ rabuplot <- function(phylo_ob,
   if(taxa_are_rows(phylo_ob)) otu_mat <- t(otu_mat)
   if(!is.null(facet_wrap)) index <- !is.na(get_variable(phylo_ob, predictor)) & !is.na(get_variable(phylo_ob, facet_wrap))
   else   index <- !is.na(get_variable(phylo_ob, predictor))
-  if(length(unique(index)) !=1) message(paste(length(which(index==F)), "samples have been removed from total dataset (predictor/facet_wrap NAs)"))
+  if(length(unique(index)) !=1) message(paste(length(which(index==F)), "samples have been removed from full dataset (predictor/facet_wrap NAs)"))
   otu_mat <- otu_mat[index,]
   otu_mat  <- otu_mat[,colSums(otu_mat)>0] #removes empty OTUs;
   OTU_index <- colnames(otu_mat)
@@ -207,14 +207,14 @@ rabuplot <- function(phylo_ob,
         pval_tmp <- data.frame(variable=mgsfit$taxa,pval=mgsfit$pvalues)
       }
       if(stats=="non-parametric"){   #Kruskal-Wallis
-        if(i==1) message("Non-parametric")
+        if(i==1) message("Non-parametric statistics")
         pval_tmp <- cbind(abund3,pred) %>% as_tibble() %>%
           gather(variable, value,-"pred") %>%
           group_by(variable) %>%
           summarize(pval = kruskal.test(value ~ pred)$p.value, .groups = 'drop')
       }
       if(stats=="parametric"){
-        if(i==1) message("Parametric")
+        if(i==1) message("Parametric statistics")
         pval_tmp <- cbind(abund3,pred) %>% as_tibble() %>%
           gather(variable, value,-"pred") %>%
           group_by(variable) %>%
@@ -297,7 +297,6 @@ rabuplot <- function(phylo_ob,
         dplyr::group_by(variable,predictor2,wrap,colvar) %>%
         dplyr::summarize(value = mean(value))
     molten_mean$colvar <- factor(molten_mean$colvar, levels=ordered2)
-
   }
   #Calculate pvalue for outcomes
   if(p_val==TRUE & ((bar_chart==TRUE & bar_chart_stacked==FALSE) | bar_chart==FALSE) & is.null(color_by)){
@@ -422,4 +421,3 @@ rabuplot <- function(phylo_ob,
   }
   p
 }
-
