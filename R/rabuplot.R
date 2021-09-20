@@ -156,6 +156,8 @@ rabuplot <- function(phylo_ob,
     }
   }
   if (!is.null(list_taxa)) {
+    no_other_type <- TRUE
+    N_taxa <- length(list_taxa)
     abund <- abund[,colnames(abund) %in% list_taxa, drop = FALSE]
     unique_tax <- names(abund)
   }
