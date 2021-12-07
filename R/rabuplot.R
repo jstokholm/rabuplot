@@ -180,12 +180,12 @@ rabuplot <- function(phylo_ob,
   if(p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
     index <- !is.na(rownames(samp))
     if(!is.null(Strata)) index <- samp[,Strata]==Strata_val
-    samp2 <- samp[index,]
+    samp2 <- samp %>% filter(index)
     if(p_adjust_full ==TRUE | stats=="mgs_feature"){
-      abund2 <- abund_org[index,]
+      abund2 <- abund_org %>% filter(index)
       if(relative_abun==TRUE & stats!="mgs_feature") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
     }
-    else abund2 <- abund[index,]
+    else abund2 <- abund %>% filter(index)
     pred <- samp2[,predictor]
 
     if(stats=="mgs_feature" & length(levels(factor(pred)))>2){
@@ -195,7 +195,7 @@ rabuplot <- function(phylo_ob,
     pval <- data.frame()
     for (i in 1:length(unique(samp2$wrap))){
       index <- samp2$wrap==unique(samp2$wrap)[[i]]
-      abund3 <- abund2[index,]
+      abund3 <- abund2 %>% filter(index)
       pred <- samp2[index,predictor]
       # test with featureModel
       if(stats=="mgs_feature"){
@@ -296,8 +296,8 @@ rabuplot <- function(phylo_ob,
     if(!is.null(color_by) & reverse==TRUE) cols <- rev(cols)
     if(is.null(facet_wrap))  molten$wrap <- ""
     molten_mean <- molten %>%
-        dplyr::group_by(variable,predictor2,wrap,colvar) %>%
-        dplyr::summarize(value = mean(value))
+      dplyr::group_by(variable,predictor2,wrap,colvar) %>%
+      dplyr::summarize(value = mean(value))
     molten_mean$colvar <- factor(molten_mean$colvar, levels=ordered2)
   }
   #Calculate pvalue for outcomes
@@ -330,8 +330,8 @@ rabuplot <- function(phylo_ob,
     else   molten$value <- molten$value+0.001 #add pseudocount for log scale 0;
     ordered <- levels(factor(molten$colvar))
     p <- ggplot(molten, aes(x=variable, y=value, fill=predictor2)) +
-    {if(violin){geom_violin(scale = violin_scale,width = 0.65, position=position_dodge(width=0.9),size=1, color="#00000000")} else {geom_boxplot(width = 0.55, position=position_dodge(width=0.8),size=0.3,outlier.size = 0,outlier.color = "grey")}}+
-    {if(violin){stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="black", position=position_dodge(width=0.9))} else {stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="#00000000", position=position_dodge(width=0.9))}}+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),legend.text=element_text(size=12),legend.key.size = unit(0.5, "cm"))+ coord_flip() +xlab(NULL)+ylab(xlabs)+ggtitle(main)
+      {if(violin){geom_violin(scale = violin_scale,width = 0.65, position=position_dodge(width=0.9),size=1, color="#00000000")} else {geom_boxplot(width = 0.55, position=position_dodge(width=0.8),size=0.3,outlier.size = 0,outlier.color = "grey")}}+
+      {if(violin){stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="black", position=position_dodge(width=0.9))} else {stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="#00000000", position=position_dodge(width=0.9))}}+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),legend.text=element_text(size=12),legend.key.size = unit(0.5, "cm"))+ coord_flip() +xlab(NULL)+ylab(xlabs)+ggtitle(main)
     if(length(unique(molten$variable))>1) p <- p+ geom_vline(xintercept=seq(1.5, length(unique(molten$variable))-0.5, 1),lwd=0.2, colour="grey")
 
     p <- p +  scale_fill_manual(values =cols,labels=legend_names) + guides(fill = guide_legend(title=legend_title, reverse = TRUE,override.aes = list(linetype=0, shape=16,color=rev(cols),size=5, bg="white")))
