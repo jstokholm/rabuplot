@@ -44,6 +44,7 @@
 #' @param bar_chart_stacked Produce stacked bar chart; default is FALSE
 #' @param percent Print percentages on bar chart; default is FALSE.
 #' @param facet_wrap Facet wrap chart by variable; eg. Time; default is NULL.
+#' @param facet_label Facet wrap labels; default is NULL.
 #' @param order_by Choose variable to order the selected taxa by; eg. Time; default is Time.
 #' @param order_val Choose value for @order_by; default is NULL.
 #'
@@ -92,6 +93,7 @@ rabuplot <- function(phylo_ob,
                      bar_chart=FALSE,
                      bar_chart_stacked=FALSE,
                      facet_wrap=NULL,
+                     facet_label=NULL,
                      percent=FALSE,
                      order_by="Time",
                      order_val=NULL)
@@ -351,7 +353,11 @@ rabuplot <- function(phylo_ob,
       if(is.null(color_by) & is.null(facet_wrap) & bar_chart_stacked==TRUE) p <- p+theme(legend.position="none")
     }
   }
-  if(!is.null(facet_wrap))   { p <- p+ facet_grid(~wrap,scales = "free", space = "free")+ theme(strip.background = element_blank())
+  if(!is.null(facet_wrap))   {
+    if(is.null(facet_label)) label_names <- levels(factor(samp[,facet_wrap]))
+    if(!is.null(facet_label)) label_names <- facet_label
+    names(label_names) <- levels(factor(samp[,facet_wrap]))
+    p <- p+ facet_grid(~wrap,labeller = labeller(wrap=label_names),scales = "free", space = "free")+ theme(strip.background = element_blank())
   if(bar_chart==FALSE) p$layers[4:5] <- NULL
   }
   if(italic_names==TRUE &  (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))   p <- p+ theme(axis.text.y=element_text(face = "italic"))

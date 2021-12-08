@@ -46,6 +46,7 @@ rabuplot(
   bar_chart = FALSE,
   bar_chart_stacked = FALSE,
   facet_wrap = NULL,
+  facet_label = NULL,
   percent = FALSE,
   order_by = "Time",
   order_val = NULL
@@ -133,6 +134,8 @@ rabuplot(
 \item{bar_chart_stacked}{Produce stacked bar chart; default is FALSE}
 
 \item{facet_wrap}{Facet wrap chart by variable; eg. Time; default is NULL.}
+
+\item{facet_label}{Facet wrap labels; default is NULL.}
 
 \item{percent}{Print percentages on bar chart; default is FALSE.}
 
