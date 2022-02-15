@@ -250,7 +250,7 @@ rabuplot <- function(phylo_ob,
       molten <- subset[,c("ID",paste(bacteria),"predictor2")] %>% gather(variable, value,-"predictor2",-"ID")
   }
   if(!is.null(color_by)){
-    molten[molten$variable != paste("Other",type),"colvar"] <- molten %>% dplyr::filter(variable != paste("Other",type)) %>% .[,"variable"] %>% match(tax[,type]) %>% tax[.,"phylum"] %>% as.character
+    molten[molten$variable != paste("Other",type),"colvar"] <- molten %>% dplyr::filter(variable != paste("Other",type)) %>% .[,"variable"] %>% match(tax[,type]) %>% tax[.,color_by] %>% as.character
     molten[molten$variable == paste("Other",type),"colvar"] <- "Other" %>% as.character
   }
 
@@ -362,7 +362,7 @@ rabuplot <- function(phylo_ob,
   }
   if(italic_names==TRUE &  (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
   if(!is.null(color_by)) {
-    p <- p + facet_grid(~predictor2, scales = "free", space = "free")
+   # p <- p + facet_grid(~predictor2, scales = "free", space = "free")
     if(color_by=="genus" | color_by=="family" | color_by=="species") p <- p+ theme(legend.text=element_text(face = "italic"))
   }
   if(p_val==TRUE){
