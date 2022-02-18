@@ -252,24 +252,25 @@ rabuplot <- function(phylo_ob,
   if(!is.null(color_by)){
     molten[molten$variable != paste("Other",type),"colvar"] <- molten %>% dplyr::filter(variable != paste("Other",type)) %>% .[,"variable"] %>% match(tax[,type]) %>% tax[.,color_by] %>% as.character
     molten[molten$variable == paste("Other",type),"colvar"] <- paste("Other",color_by) %>% as.character
+    molten$colvar <- gsub('_',' ',molten$colvar)
   }
-
   molten$variable <- gsub('_',' ',molten$variable)
 
   if(order)   ordered <- unique(molten$variable) #level order
   if(!order)   ordered <-sort(unique(molten$variable))#level order alphabetically
 
   molten$variable <- factor(molten$variable, levels=ordered)
-  if(is.null(color_by))  molten$colvar <- molten$variable
+  if((is.null(color_by) & length(unique(molten$predictor2))<2) | bar_chart_stacked==TRUE)  molten$colvar <- molten$variable
+  if(is.null(color_by) & !length(unique(molten$predictor2))<2 & bar_chart_stacked==FALSE)  molten$colvar <- molten$predictor2
   if(!is.null(Strata))  molten <- molten[which(molten[,Strata]==Strata_val), ]
-
+moltenged <<- molten
   if(is.null(colors)){
     cols  <- c(brewer.pal(8,"Set1"), brewer.pal(7,"Dark2"),brewer.pal(7,"Set2"),brewer.pal(12,"Set3"),brewer.pal(7,"Accent"),brewer.pal(12,"Paired"),"gray")
-    cols <- cols[1:length(levels(factor(molten$predictor2)))]
+    if(length(unique(molten$colvar)) == length(unique(molten$predictor2)))  cols <- cols[1:length(levels(factor(molten$colvar)))]
+    if(length(unique(molten$colvar)) == length(unique(molten$variable))) cols <- cols[c(1:length(levels(factor(molten$colvar)))-1,length(cols))]
   }
   if(!is.null(colors)) cols <- colors
 
-  if(bar_chart==TRUE & bar_chart_stacked==FALSE & is.null(legend_names))  legend_names <- as.character(levels(factor(molten$predictor2)))
   if(is.null(legend_names))  legend_names <- as.character(levels(factor(molten$predictor2)))
   ordered2<- rev(unique(molten$colvar))
   if(reverse){
@@ -285,14 +286,9 @@ rabuplot <- function(phylo_ob,
       ordered2<- rev(ordered2)
     }
   }
-
+molten <<- molten
   if(bar_chart){
     log=FALSE
-    cols  <- c(brewer.pal(8,"Set1"), brewer.pal(7,"Dark2"),brewer.pal(7,"Set2"),brewer.pal(12,"Set3"),brewer.pal(7,"Accent"),brewer.pal(12,"Paired"),"gray")
-    #  ordered <- levels(factor(molten$colvar))
-    if(is.null(color_by) & bar_chart_stacked==FALSE)   cols <- cols[1:length(levels(factor(molten$predictor2)))]
-
-    else cols <- cols[c(1:length(levels(factor(molten$colvar)))-1,length(cols))]
     if(!is.null(colors)) cols <- colors
     if(is.null(color_by) & reverse==FALSE) cols <- rev(cols)
     if(!is.null(color_by) & reverse==TRUE) cols <- rev(cols)
@@ -312,7 +308,7 @@ rabuplot <- function(phylo_ob,
       pval <- data.frame(pval=pval[gsub('_',' ',pval$variable) %in% ordered,]$pval,p_adjust=pval[gsub('_',' ',pval$variable) %in% ordered,]$p_adjust, variable=gsub('_',' ',pval[gsub('_',' ',pval$variable) %in% ordered,]$variable))
       if(length(pval$variable)-length(ordered)<0) pval <- pval[match(pval$variable,ordered[length(pval$variable)-length(ordered)]),]
     }
-    pval$predictor2 <- molten$predictor2[1]
+    pval$colvar <- molten$predictor2[1]
     pval$pval <- ifelse(is.na(pval$pval),1,pval$pval)
     pval$p_adjust <- ifelse(is.na(pval$p_adjust),1,pval$p_adjust)
     if(Only_sig){
@@ -331,7 +327,7 @@ rabuplot <- function(phylo_ob,
     if(ncol(tax)>=6) molten$value <- molten$value+1e-6 #add pseudocount for log scale 0;
     else   molten$value <- molten$value+0.001 #add pseudocount for log scale 0;
     ordered <- levels(factor(molten$colvar))
-    p <- ggplot(molten, aes(x=variable, y=value, fill=predictor2)) +
+    p <- ggplot(molten, aes(x=variable, y=value, fill=colvar)) +
       {if(violin){geom_violin(scale = violin_scale,width = 0.65, position=position_dodge(width=0.9),size=1, color="#00000000")} else {geom_boxplot(width = 0.55, position=position_dodge(width=0.8),size=0.3,outlier.size = 0,outlier.color = "grey")}}+
       {if(violin){stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="black", position=position_dodge(width=0.9))} else {stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="#00000000", position=position_dodge(width=0.9))}}+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),legend.text=element_text(size=12),legend.key.size = unit(0.5, "cm"))+ coord_flip() +xlab(NULL)+ylab(xlabs)+ggtitle(main)
     if(length(unique(molten$variable))>1) p <- p+ geom_vline(xintercept=seq(1.5, length(unique(molten$variable))-0.5, 1),lwd=0.2, colour="grey")
@@ -339,32 +335,36 @@ rabuplot <- function(phylo_ob,
     p <- p +  scale_fill_manual(values =cols,labels=legend_names) + guides(fill = guide_legend(title=legend_title, reverse = TRUE,override.aes = list(linetype=0, shape=16,color=rev(cols),size=5, bg="white")))
 
   }
+molten_mean <<- molten_mean
   if(bar_chart==TRUE){
+    molten_mean$colvar <- factor(molten_mean$colvar, levels=ordered)
     if(bar_chart_stacked==TRUE)
-      p <-  ggplot(molten_mean,aes(x=factor(predictor2,labels=legend_names),y=value, fill=variable)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
+      p <-  ggplot(molten_mean,aes(x=factor(predictor2,labels=legend_names),y=value, fill=colvar)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
     if(bar_chart_stacked==FALSE){
-      if(!is.null(color_by)) p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=colvar,group=wrap))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=ordered2)+ guides(fill = guide_legend(title=color_by))
+      if(!is.null(color_by)) p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=colvar,group=wrap))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=ordered2)+{if(color_by==type) + guides(fill = guide_legend(title=NULL))}
       else {
-        p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=predictor2))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=legend_names)+ guides(fill = guide_legend(title=legend_title))
+        p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=colvar))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=legend_names)
 
       }
-      p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ theme(strip.background = element_blank()) +coord_flip()
+      p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ guides(fill = guide_legend(title=legend_title)) + theme(strip.background = element_blank()) +coord_flip()
+
+
     }
+
   }
   if(!is.null(facet_wrap))   {
     if(is.null(facet_label)) label_names <- levels(factor(samp[,facet_wrap]))
     if(!is.null(facet_label)) label_names <- facet_label
     names(label_names) <- levels(factor(samp[,facet_wrap]))
     p <- p+ facet_grid(~wrap,labeller = labeller(wrap=label_names),scales = "free", space = "free")+ theme(strip.background = element_blank())
-    if(bar_chart==FALSE) p$layers[4:5] <- NULL
+  if(bar_chart==FALSE) p$layers[4:5] <- NULL
   }
   if(italic_names==TRUE &  (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
   if(!is.null(color_by)) {
-    # p <- p + facet_grid(~predictor2, scales = "free", space = "free")
+   # p <- p + facet_grid(~predictor2, scales = "free", space = "free")
     if(color_by=="genus" | color_by=="family" | color_by=="species") p <- p+ theme(legend.text=element_text(face = "italic"))
     if(color_by==type & bar_chart_stacked==FALSE ) p <- p+theme(legend.position="none")
-      }
-
+  }
   if(p_val==TRUE){
     if(log==FALSE){
       if(bar_chart==TRUE) pval$y <- max(molten_mean$value)*1.10
