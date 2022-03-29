@@ -99,7 +99,7 @@ rabuplot <- function(phylo_ob,
                      order_val=NULL)
 {
   if(!is.null(list_taxa) & is.null(N_taxa)) N_taxa = length(list_taxa)
-  if(is.null(N_taxa)) N_taxa=15
+  if(is.null(N_taxa) & is.null(list_taxa)) N_taxa=15
   options(dplyr.summarise.inform = FALSE)
   if(bar_chart_stacked==TRUE & bar_chart==FALSE) {
     bar_chart=TRUE
@@ -161,7 +161,7 @@ rabuplot <- function(phylo_ob,
   }
   if (!is.null(list_taxa)) {
     no_other_type <- TRUE
-    N_taxa <- length(list_taxa)
+    if (is.null(N_taxa)) N_taxa <- length(list_taxa)
     abund <- abund[,colnames(abund) %in% list_taxa, drop = FALSE]
     unique_tax <- names(abund)
   }

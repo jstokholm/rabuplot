@@ -336,10 +336,11 @@ molten <<- molten
 
   }
 molten_mean <<- molten_mean
+cols_out <<- cols
   if(bar_chart==TRUE){
-    molten_mean$colvar <- factor(molten_mean$colvar, levels=ordered)
+    molten_mean$colvar <- factor(molten_mean$colvar, levels=ordered2)
     if(bar_chart_stacked==TRUE)
-      p <-  ggplot(molten_mean,aes(x=factor(predictor2,labels=legend_names),y=value, fill=colvar)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
+      p <-  ggplot(molten_mean,aes(x=factor(predictor2,labels=legend_names),y=value, fill=rev(colvar))) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols) + guides(fill = guide_legend(title=NULL))
     if(bar_chart_stacked==FALSE){
       if(!is.null(color_by)) p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=colvar,group=wrap))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=ordered2)+{if(color_by==type) + guides(fill = guide_legend(title=NULL))}
       else {
