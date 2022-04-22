@@ -45,6 +45,7 @@
 #' @param percent Print percentages on bar chart; default is FALSE.
 #' @param facet_wrap Facet wrap chart by variable; eg. Time; default is NULL.
 #' @param facet_label Facet wrap labels; default is NULL.
+#' @param facet_n Show n for each facet; default is TRUE.
 #' @param order_by Choose variable to order the selected taxa by; eg. Time; default is Time.
 #' @param order_val Choose value for @order_by; default is NULL.
 #'
@@ -94,6 +95,7 @@ rabuplot <- function(phylo_ob,
                      bar_chart_stacked=FALSE,
                      facet_wrap=NULL,
                      facet_label=NULL,
+                     facet_n=TRUE,
                      percent=FALSE,
                      order_by="Time",
                      order_val=NULL)
@@ -354,7 +356,15 @@ rabuplot <- function(phylo_ob,
   if(!is.null(facet_wrap))   {
     if(is.null(facet_label)) label_names <- levels(factor(samp[,facet_wrap]))
     if(!is.null(facet_label)) label_names <- facet_label
+    if(facet_n==TRUE){
+      label_names <- samp %>%
+        dplyr::group_by(get(facet_wrap)) %>%
+        dplyr::summarise(n = n()) %>%
+        dplyr::mutate(pasted_label = paste0(levels(samp[[facet_wrap]]), ", n = ", n))
+      label_names <- as.character(label_names$pasted_label)
+    }
     names(label_names) <- levels(factor(samp[,facet_wrap]))
+
     p <- p+ facet_grid(~wrap,labeller = labeller(wrap=label_names),scales = "free", space = "free")+ theme(strip.background = element_blank())
     if(bar_chart==FALSE) p$layers[4:5] <- NULL
   }
