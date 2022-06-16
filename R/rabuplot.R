@@ -360,7 +360,7 @@ rabuplot <- function(phylo_ob,
       label_names <- samp %>%
         dplyr::group_by(get(facet_wrap)) %>%
         dplyr::summarise(n = n()) %>%
-        dplyr::mutate(pasted_label = paste0(levels(samp[[facet_wrap]]), ", n = ", n))
+        dplyr::mutate(pasted_label = paste0(levels(factor(samp[,facet_wrap])), ", n = ", n))
       label_names <- as.character(label_names$pasted_label)
     }
     names(label_names) <- levels(factor(samp[,facet_wrap]))
