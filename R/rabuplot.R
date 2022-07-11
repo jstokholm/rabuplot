@@ -357,13 +357,13 @@ rabuplot <- function(phylo_ob,
     if(is.null(facet_label)) label_names <- levels(factor(samp[,facet_wrap]))
     if(!is.null(facet_label)) label_names <- facet_label
     if(facet_n==TRUE){
-      label_names <- samp %>%
+      label_names <- samp2 %>%
         dplyr::group_by(get(facet_wrap)) %>%
         dplyr::summarise(n = n()) %>%
-        dplyr::mutate(pasted_label = paste0(levels(factor(samp[,facet_wrap])), ", n = ", n))
+        dplyr::mutate(pasted_label = paste0(levels(factor(samp2[,facet_wrap])), ", n = ", n))
       label_names <- as.character(label_names$pasted_label)
     }
-    names(label_names) <- levels(factor(samp[,facet_wrap]))
+    names(label_names) <- levels(factor(samp2[,facet_wrap]))
 
     p <- p+ facet_grid(~wrap,labeller = labeller(wrap=label_names),scales = "free", space = "free")+ theme(strip.background = element_blank())
     if(bar_chart==FALSE) p$layers[4:5] <- NULL
