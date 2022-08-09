@@ -180,11 +180,10 @@ rabuplot <- function(phylo_ob,
     }
     if(no_other_type)  abund[,paste("Other",type)] <- NULL
   }
-
+  index <- !is.na(rownames(samp))
+  if(!is.null(Strata)) index <- samp[,Strata]==Strata_val
+  samp2 <- samp %>% filter(index)
   if(p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
-    index <- !is.na(rownames(samp))
-    if(!is.null(Strata)) index <- samp[,Strata]==Strata_val
-    samp2 <- samp %>% filter(index)
     if(p_adjust_full ==TRUE | stats=="mgs_feature"){
       abund2 <- abund_org %>% filter(index)
       if(relative_abun==TRUE & stats!="mgs_feature") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
