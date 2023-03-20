@@ -30,7 +30,7 @@
 #' @param stat_out Outputs a data.frame with statistics to Global environment; default is FALSE.
 #' @param p_val Displays p-values on plot; default is TRUE.
 #' @param p_stars Shows stars instead of p-values; default is FALSE.
-#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed" "mgs_feature"; default is "non-parametric".
+#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature"; default is "non-parametric".
 #' @param p_adjust adjust p-values; default is "FALSE.
 #' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr"; default is "fdr".
 #' @param p_adjust_full correction applied for all taxa in the dataset; default is FALSE.
