@@ -6,6 +6,7 @@
 #' @param predictor Predictor of interest for statistics/plotting in sample_data.
 #' @param type Taxonomic rank from tax_table, case insensitive; default is "genus".
 #' @param relative_abun Use relative abundances, else absolute; default is TRUE.
+#' @param id Define id variable for mixed models.
 #' @param xlabs X-axis label
 #' @param ylabs Y-axis label
 #' @param main Title of plot
@@ -29,7 +30,7 @@
 #' @param stat_out Outputs a data.frame with statistics to Global environment; default is FALSE.
 #' @param p_val Displays p-values on plot; default is TRUE.
 #' @param p_stars Shows stars instead of p-values; default is FALSE.
-#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mgs_feature"; default is "non-parametric".
+#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed" "mgs_feature"; default is "non-parametric".
 #' @param p_adjust adjust p-values; default is "FALSE.
 #' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr"; default is "fdr".
 #' @param p_adjust_full correction applied for all taxa in the dataset; default is FALSE.
@@ -49,7 +50,7 @@
 #' @param order_by Choose variable to order the selected taxa by; eg. Time; default is Time.
 #' @param order_val Choose value for @order_by; default is NULL.
 #'
-#' @import ggplot2 phyloseq metagenomeSeq dplyr tidyr RColorBrewer
+#' @import ggplot2 phyloseq metagenomeSeq dplyr tidyr RColorBrewer lmerTest
 #' @return A ggplot
 #' @export
 
@@ -57,6 +58,7 @@ rabuplot <- function(phylo_ob,
                      predictor="none",
                      type="genus",
                      relative_abun=TRUE,
+                     id=NULL,
                      xlabs = "Relative abundance (%)",
                      ylabs = "Average relative abundance",
                      main = "Relative abundance plot",
@@ -189,13 +191,27 @@ rabuplot <- function(phylo_ob,
       if(relative_abun==TRUE & stats!="mgs_feature") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
     }
     else abund2 <- abund %>% filter(index)
-    pred <- samp2[,predictor]
-
     if(stats=="mgs_feature" & length(levels(factor(pred)))>2){
       stats="non-parametric"
       message("MGS not available for >2 predictors, switching to non-parametric")
     }
-    pval <- data.frame()
+    if(stats=="mixed" & is.null(id)){
+      stats="non-parametric"
+      message("No id variable for mixed model, switching to non-parametric")
+    }
+    if(stats=="mixed"){
+      pred <- samp2[,predictor]
+      id <- samp2[,id]
+      message("Mixed model statistics")
+      pval <- cbind(abund2,pred,id) %>% as_tibble() %>%
+        gather(variable, value,-"pred",-"id") %>%
+        group_by(variable) %>%
+        summarize(pval = lmer(value ~ pred + (1 | id)) %>% anova %>% .$'Pr(>F)', .groups = 'drop')
+      pval <- pval %>%
+        mutate(wrap="Mixed",p_adjust=p.adjust(pval, p_adjust_method))
+    }
+    else {
+      pval <- data.frame()
     for (i in 1:length(unique(samp2$wrap))){
       index <- samp2$wrap==unique(samp2$wrap)[[i]]
       abund3 <- abund2 %>% filter(index)
@@ -228,6 +244,7 @@ rabuplot <- function(phylo_ob,
       pval_tmp <- pval_tmp %>%
         mutate(wrap=unique(samp2$wrap)[[i]],p_adjust=p.adjust(pval, p_adjust_method))
       pval <- rbind(pval,pval_tmp)
+    }
     }
     if(p_adjust) message(paste(p_adjust_method,"correction applied for",length(unique(pval$variable)),"taxa"))
   }
@@ -347,8 +364,8 @@ rabuplot <- function(phylo_ob,
       if(!is.null(color_by)) p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=colvar,group=wrap))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=ordered2)+ guides(fill = guide_legend(title=color_by))
       else {
         p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=predictor2))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=legend_names)+ guides(fill = guide_legend(title=legend_title))
-
       }
+      if(length(unique(molten_mean$variable))>1) p <- p+ geom_vline(xintercept=seq(1.5, length(unique(molten_mean$variable))-0.5, 1),lwd=0.2, colour="grey")
       p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ theme(strip.background = element_blank()) +coord_flip()
     }
   }
@@ -363,8 +380,11 @@ rabuplot <- function(phylo_ob,
       label_names <- as.character(label_names$pasted_label)
     }
     names(label_names) <- levels(factor(samp2[,facet_wrap]))
-
-    p <- p+ facet_grid(~wrap,labeller = labeller(wrap=label_names),scales = "free", space = "free")+ theme(strip.background = element_blank())
+    if(stats=="mixed") {
+      label_names <- c(label_names,"Mixed")
+      names(label_names) <- c(levels(factor(samp2[,facet_wrap])),"Mixed")
+    }
+    p <- p+ facet_grid(~wrap,labeller = labeller(wrap=label_names),scales = "free", space = "free")+  theme(strip.background = element_blank())
     if(bar_chart==FALSE) p$layers[4:5] <- NULL
   }
   if(italic_names==TRUE &  (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
@@ -408,8 +428,18 @@ rabuplot <- function(phylo_ob,
   if(log==FALSE){
     if(p_val==FALSE) p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1),labels=c("0%","25%","50%","75%","100%"))
     if(p_val==TRUE){
-      if(p_adjust==TRUE) p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,1.12,1.20),labels=c("0%","25%","50%","75%","100%", "P-value", "q-value"))
-      if(p_adjust==FALSE) p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,1.12),labels=c("0%","25%","50%","75%","100%", "P-value"))
+      if(p_adjust==TRUE) {
+        if(max(molten_mean$value)<=1 & max(molten_mean$value)>=0.75) p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","25%","50%","75%","100%", "P-value", "q-value"))
+      if(max(molten_mean$value)<0.75 & max(molten_mean$value)>=0.50) p <- p + scale_y_continuous(breaks=c(0,.25,.50,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","25%","50%", "P-value", "q-value"))
+      if(max(molten_mean$value)<0.50 & max(molten_mean$value)>=0.25) p <- p + scale_y_continuous(breaks=c(0,.1,.2,.3,.4,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","10%","20%","30%","40%", "P-value", "q-value"))
+      if(max(molten_mean$value)<0.25) p <- p + scale_y_continuous(breaks=c(0,.05,.1,.15,.2,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","5%","10%","15%","20%", "P-value", "q-value"))
+      }
+            if(p_adjust==FALSE) {
+        if(max(molten_mean$value)<=1 & max(molten_mean$value)>=0.75)  p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,max(molten_mean$value)*1.07),labels=c("0%","25%","50%","75%","100%", "P-value"))
+        if(max(molten_mean$value)<0.75 & max(molten_mean$value)>=0.50) p <- p + scale_y_continuous(breaks=c(0,.25,.50,max(molten_mean$value)*1.07),labels=c("0%","25%","50%", "P-value"))
+        if(max(molten_mean$value)<0.50 & max(molten_mean$value)>=0.25) p <- p + scale_y_continuous(breaks=c(0,.1,.2,.3,.4,max(molten_mean$value)*1.07),labels=c("0%","10%","20%","30%","40%", "P-value"))
+        if(max(molten_mean$value)<0.25) p <- p + scale_y_continuous(breaks=c(0,.05,.1,.15,.2,max(molten_mean$value)*1.07),labels=c("0%","5%","10%","15%","20%", "P-value"))
+      }
     }
   }
 
@@ -428,6 +458,10 @@ rabuplot <- function(phylo_ob,
     if(p_adjust){
       p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust<0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
       p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust>=0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
+    }
+    if(stats=="mixed" & !is.null(facet_wrap)){
+     if(bar_chart==FALSE) p <- p + expand_limits(y = 2)
+     if(bar_chart==TRUE) p <- p + expand_limits(y = max(molten_mean2$value))
     }
   }
   p

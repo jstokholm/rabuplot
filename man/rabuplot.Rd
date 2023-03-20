@@ -9,6 +9,7 @@ rabuplot(
   predictor = "none",
   type = "genus",
   relative_abun = TRUE,
+  id = NULL,
   xlabs = "Relative abundance (\%)",
   ylabs = "Average relative abundance",
   main = "Relative abundance plot",
@@ -62,6 +63,8 @@ rabuplot(
 
 \item{relative_abun}{Use relative abundances, else absolute; default is TRUE.}
 
+\item{id}{Define id variable for mixed models.}
+
 \item{xlabs}{X-axis label}
 
 \item{ylabs}{Y-axis label}
@@ -108,7 +111,7 @@ rabuplot(
 
 \item{p_stars}{Shows stars instead of p-values; default is FALSE.}
 
-\item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mgs_feature"; default is "non-parametric".}
+\item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mixed" "mgs_feature"; default is "non-parametric".}
 
 \item{p_adjust}{adjust p-values; default is "FALSE.}
 
