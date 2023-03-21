@@ -191,7 +191,7 @@ rabuplot <- function(phylo_ob,
       if(relative_abun==TRUE & stats!="mgs_feature") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
     }
     else abund2 <- abund %>% filter(index)
-    if(stats=="mgs_feature" & length(levels(factor(pred)))>2){
+    if(stats=="mgs_feature" & length(levels(factor(samp2[,predictor])))>2){
       stats="non-parametric"
       message("MGS not available for >2 predictors, switching to non-parametric")
     }
