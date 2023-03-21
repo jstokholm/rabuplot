@@ -111,7 +111,7 @@ rabuplot(
 
 \item{p_stars}{Shows stars instead of p-values; default is FALSE.}
 
-\item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mixed" "mgs_feature"; default is "non-parametric".}
+\item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature"; default is "non-parametric".}
 
 \item{p_adjust}{adjust p-values; default is "FALSE.}
 

@@ -206,8 +206,7 @@ rabuplot <- function(phylo_ob,
       pval <- cbind(abund2,pred,id) %>% as_tibble() %>%
         gather(variable, value,-"pred",-"id") %>%
         group_by(variable) %>%
-        summarize(pval = lmer(value ~ pred + (1 | id)) %>% anova %>% .$'Pr(>F)', .groups = 'drop')
-      pval <- pval %>%
+        summarize(pval = lmer(value ~ pred + (1 | id)) %>% anova %>% .$'Pr(>F)', .groups = 'drop') %>%
         mutate(wrap="Mixed",p_adjust=p.adjust(pval, p_adjust_method))
     }
     else {
