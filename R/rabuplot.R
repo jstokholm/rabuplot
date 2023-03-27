@@ -105,7 +105,7 @@ rabuplot <- function(phylo_ob,
   if(!is.null(list_taxa) & is.null(N_taxa)) N_taxa = length(list_taxa)
   if(is.null(N_taxa) & is.null(list_taxa)) N_taxa=15
   options(dplyr.summarise.inform = FALSE)
-  if(bar_chart_stacked==TRUE & bar_chart==FALSE) {
+  if(bar_chart_stacked==TRUE) {
     bar_chart=TRUE
     p_val=FALSE
   }
@@ -200,14 +200,26 @@ rabuplot <- function(phylo_ob,
       message("No id variable for mixed model, switching to non-parametric")
     }
     if(stats=="mixed"){
+      message("Mixed model statistics")
       pred <- samp2[,predictor]
       id <- samp2[,id]
-      message("Mixed model statistics")
-      pval <- cbind(abund2,pred,id) %>% as_tibble() %>%
+      if(!is.null(facet_wrap)) {
+        message(paste0("Using ",facet_wrap," as mixed model group variable"))
+        facet <- samp2[,"wrap"]
+        pval <- cbind(abund2,pred,id,facet) %>% as_tibble() %>%
+        gather(variable, value,-"pred",-"id",-"facet") %>%
+        group_by(variable) %>%
+        summarize(pval = lmerTest::lmer(value ~ pred + factor(facet) + (1 | id)) %>% anova %>% filter(row_number()==1) %>% .$'Pr(>F)', .groups = 'drop')
+      }
+      else {
+        message(paste0("No group variable defined for mixed model in facet_wrap"))
+        pval <- cbind(abund2,pred,id) %>% as_tibble() %>%
         gather(variable, value,-"pred",-"id") %>%
         group_by(variable) %>%
-        summarize(pval = lmerTest::lmer(value ~ pred + (1 | id)) %>% anova %>% .$'Pr(>F)', .groups = 'drop') %>%
-        mutate(wrap="Mixed",p_adjust=p.adjust(pval, p_adjust_method))
+        summarize(pval = lmerTest::lmer(value ~ pred + (1 | id)) %>% anova %>% .$'Pr(>F)', .groups = 'drop')
+      }
+    pval <- pval %>%  mutate(wrap="Mixed",p_adjust=p.adjust(pval, p_adjust_method))
+    pval$wrap <- factor(pval$wrap,levels=c(levels(factor(samp2[,facet_wrap])),"Mixed"))
     }
     else {
       pval <- data.frame()
@@ -356,9 +368,11 @@ rabuplot <- function(phylo_ob,
     p <- p +  scale_fill_manual(values =cols,labels=legend_names) + guides(fill = guide_legend(title=legend_title, reverse = TRUE,override.aes = list(linetype=0, shape=16,color=rev(cols),size=5, bg="white")))
 
   }
+
+ # legend_names <- molten_mean[molten_mean$variable %in% rev(molten_mean$colvar)[1],] %>% arrange(desc(value)) %>% ungroup %>% pull(predictor2) #order by highest abundant taxa
   if(bar_chart==TRUE){
     if(bar_chart_stacked==TRUE)
-      p <-  ggplot(molten_mean,aes(x=factor(predictor2,labels=legend_names),y=value, fill=variable)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
+      p <-  ggplot(molten_mean,aes(x=factor(predictor2,levels=legend_names,labels=legend_names),y=value, fill=variable)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
     if(bar_chart_stacked==FALSE){
       if(!is.null(color_by)) p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=colvar,group=wrap))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=ordered2)+ guides(fill = guide_legend(title=color_by))
       else {
