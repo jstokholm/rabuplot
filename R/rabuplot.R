@@ -49,6 +49,7 @@
 #' @param facet_n Show n for each facet; default is TRUE.
 #' @param order_by Choose variable to order the selected taxa by; eg. Time; default is Time.
 #' @param order_val Choose value for @order_by; default is NULL.
+#' @param text_angle_x Choose value for rotation of axis-text; default is 0.
 #'
 #' @import ggplot2 phyloseq metagenomeSeq dplyr tidyr RColorBrewer lmerTest
 #' @return A ggplot
@@ -100,7 +101,8 @@ rabuplot <- function(phylo_ob,
                      facet_n=TRUE,
                      percent=FALSE,
                      order_by="Time",
-                     order_val=NULL)
+                     order_val=NULL,
+                     text_angle_x=0)
 {
   if(!is.null(list_taxa) & is.null(N_taxa)) N_taxa = length(list_taxa)
   if(is.null(N_taxa) & is.null(list_taxa)) N_taxa=15
@@ -456,7 +458,8 @@ rabuplot <- function(phylo_ob,
     }
   }
 
-  p <-  p+ theme(plot.background = element_blank(),panel.background = element_blank(),plot.title = element_text(hjust = 0.5))
+  p <-  p + theme(plot.background = element_blank(),panel.background = element_blank(),plot.title = element_text(hjust = 0.5))
+  p <-  p + theme(axis.text.x = element_text(angle = text_angle_x, vjust = ifelse(text_angle_x<0 & text_angle_x>-90 , 0, ifelse(text_angle_x>=0 & text_angle_x<90, 1, 0.5)), hjust=ifelse(text_angle_x==0 | text_angle_x==180 | text_angle_x==-180 | text_angle_x==180, 0.5, ifelse((text_angle_x<0 & text_angle_x>=-90) | text_angle_x>=270, 0, 1))))
   if (bar_chart==TRUE & bar_chart_stacked==FALSE & percent==TRUE)  p <- p+  geom_text(aes(label = paste0(sprintf("%.2f",value*100), "%")), hjust = -.12, position=position_dodge(width=0.95))+scale_y_continuous(limits=c(0,max(molten_mean$value)+0.2),labels = scales::percent)
   if(no_legends) p <- p + theme(legend.position="none")
   if(no_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())

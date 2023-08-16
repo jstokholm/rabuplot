@@ -51,7 +51,8 @@ rabuplot(
   facet_n = TRUE,
   percent = FALSE,
   order_by = "Time",
-  order_val = NULL
+  order_val = NULL,
+  text_angle_x = 0
 )
 }
 \arguments{
@@ -148,6 +149,8 @@ rabuplot(
 \item{order_by}{Choose variable to order the selected taxa by; eg. Time; default is Time.}
 
 \item{order_val}{Choose value for @order_by; default is NULL.}
+
+\item{text_angle_x}{Choose value for rotation of axis-text; default is 0.}
 }
 \value{
 A ggplot
