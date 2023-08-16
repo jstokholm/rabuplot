@@ -166,7 +166,7 @@ rabuplot <- function(phylo_ob,
     }
   }
   if (!is.null(list_taxa)) {
-    no_other_type <- TRUE
+    if (is.null(select_taxa)) no_other_type <- TRUE
     if (is.null(N_taxa)) N_taxa <- length(list_taxa)
     abund <- abund[,colnames(abund) %in% list_taxa, drop = FALSE]
     unique_tax <- names(abund)
@@ -179,7 +179,7 @@ rabuplot <- function(phylo_ob,
     if (By_median)  abund <- abund[,order(-apply(abund[index,], 2, median))]
     if("unclassified" %in% unique_tax) abund <- abund[c(setdiff(names(abund), "unclassified"),"unclassified")] #Move unclassified to end
     if(N_taxa<length(unique_tax) ){
-      abund[,paste("Other",type)] <- rowSums(abund[(length(unique_tax)-(length(unique_tax)-N_taxa)+1):length(unique_tax)])
+      abund[,ifelse(!is.null(select_taxa),paste("Other sub",type), paste("Other",type))] <- rowSums(abund[(length(unique_tax)-(length(unique_tax)-N_taxa)+1):length(unique_tax)])
       abund <- abund[-(length(unique_tax)-(length(unique_tax)-N_taxa)+1):-length(unique_tax)]
     }
     if(no_other_type)  abund[,paste("Other",type)] <- NULL
