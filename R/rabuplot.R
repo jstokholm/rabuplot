@@ -158,7 +158,7 @@ rabuplot <- function(phylo_ob,
   }
   abund_org <- abund
   if(relative_abun==TRUE) abund <- apply(abund,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
-
+  abund_all <- abund
   if (is.null(list_taxa) & !is.null(select_taxa)) {
     list_taxa <- NULL
     for(i in 1:length(select_taxa)){
@@ -166,7 +166,6 @@ rabuplot <- function(phylo_ob,
     }
   }
   if (!is.null(list_taxa)) {
-    if (is.null(select_taxa)) no_other_type <- TRUE
     if (is.null(N_taxa)) N_taxa <- length(list_taxa)
     abund <- abund[,colnames(abund) %in% list_taxa, drop = FALSE]
     unique_tax <- names(abund)
@@ -178,11 +177,8 @@ rabuplot <- function(phylo_ob,
     abund <- abund[,order(-colSums(abund[index,]))]
     if (By_median)  abund <- abund[,order(-apply(abund[index,], 2, median))]
     if("unclassified" %in% unique_tax) abund <- abund[c(setdiff(names(abund), "unclassified"),"unclassified")] #Move unclassified to end
-    if(N_taxa<length(unique_tax) ){
-      abund[,ifelse(!is.null(select_taxa),paste("Other sub",type), paste("Other",type))] <- rowSums(abund[(length(unique_tax)-(length(unique_tax)-N_taxa)+1):length(unique_tax)])
-      abund <- abund[-(length(unique_tax)-(length(unique_tax)-N_taxa)+1):-length(unique_tax)]
-    }
-    if(no_other_type)  abund[,paste("Other",type)] <- NULL
+    if(N_taxa<length(unique_tax)) abund <- abund[-(length(unique_tax)-(length(unique_tax)-N_taxa)+1):-length(unique_tax)]
+    if(no_other_type==FALSE) abund[, paste("Other",type)] <- rowSums(abund_all[,!names(abund_all) %in% names(abund)])
   }
   index <- !is.na(rownames(samp))
   if(!is.null(Strata)) index <- samp[,Strata]==Strata_val

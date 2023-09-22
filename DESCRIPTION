@@ -1,6 +1,6 @@
 Package: rabuplot
 Title: Relative Abundance Plot
-Version: 0.0.1.07
+Version: 0.0.1.08
 Authors@R: person("Jakob", "Stokholm", email = "stokholm@copsac.com", role = c("aut", "cre"))
 Description: Makes nice microbial abundance plots
 Depends: R (>= 3.5.1)
