@@ -52,7 +52,9 @@ rabuplot(
   percent = FALSE,
   order_by = "Time",
   order_val = NULL,
-  text_angle_x = 0
+  text_angle_x = 0,
+  rank = NULL,
+  select_rank = NULL
 )
 }
 \arguments{
@@ -112,7 +114,7 @@ rabuplot(
 
 \item{p_stars}{Shows stars instead of p-values; default is FALSE.}
 
-\item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature"; default is "non-parametric".}
+\item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2"; default is "non-parametric".}
 
 \item{p_adjust}{adjust p-values; default is "FALSE.}
 
@@ -151,6 +153,10 @@ rabuplot(
 \item{order_val}{Choose value for @order_by; default is NULL.}
 
 \item{text_angle_x}{Choose value for rotation of axis-text; default is 0.}
+
+\item{rank}{Taxonomic rank from tax_table, replaces "type", case insensitive; default is "genus".}
+
+\item{select_rank}{Taxonomic rank of the @select_taxa, replaces "select_type"; default is "genus".}
 }
 \value{
 A ggplot

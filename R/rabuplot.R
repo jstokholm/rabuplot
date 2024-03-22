@@ -30,7 +30,7 @@
 #' @param stat_out Outputs a data.frame with statistics to Global environment; default is FALSE.
 #' @param p_val Displays p-values on plot; default is TRUE.
 #' @param p_stars Shows stars instead of p-values; default is FALSE.
-#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature"; default is "non-parametric".
+#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2"; default is "non-parametric".
 #' @param p_adjust adjust p-values; default is "FALSE.
 #' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr"; default is "fdr".
 #' @param p_adjust_full correction applied for all taxa in the dataset; default is FALSE.
@@ -50,8 +50,10 @@
 #' @param order_by Choose variable to order the selected taxa by; eg. Time; default is Time.
 #' @param order_val Choose value for @order_by; default is NULL.
 #' @param text_angle_x Choose value for rotation of axis-text; default is 0.
+#' @param rank Taxonomic rank from tax_table, replaces "type", case insensitive; default is "genus".
+#' @param select_rank Taxonomic rank of the @select_taxa, replaces "select_type"; default is "genus".
 #'
-#' @import ggplot2 phyloseq metagenomeSeq dplyr tidyr RColorBrewer lmerTest
+#' @import ggplot2 phyloseq metagenomeSeq dplyr tidyr RColorBrewer  lmerTest Maaslin2
 #' @return A ggplot
 #' @export
 
@@ -102,10 +104,15 @@ rabuplot <- function(phylo_ob,
                      percent=FALSE,
                      order_by="Time",
                      order_val=NULL,
-                     text_angle_x=0)
+                     text_angle_x=0,
+                     rank=NULL,
+                     select_rank=NULL
+                     )
 {
   if(!is.null(list_taxa) & is.null(N_taxa)) N_taxa = length(list_taxa)
   if(is.null(N_taxa) & is.null(list_taxa)) N_taxa=15
+  if(!is.null(rank)) type <- rank
+  if(!is.null(select_rank)) select_type <- select_rank
   options(dplyr.summarise.inform = FALSE)
   if(bar_chart_stacked==TRUE) {
     bar_chart=TRUE
@@ -250,6 +257,24 @@ rabuplot <- function(phylo_ob,
           group_by(variable) %>%
           summarize(pval = oneway.test(value ~ pred)$p.value, .groups = 'drop')
       }
+      if(stats=="maaslin2"){   #Maaslin2
+        if(i==1) message("Maaslin2 statistics")
+        test_set <- setNames(abund3, paste0('X', seq_along(abund3)))
+        capture.output({fit_data <- Maaslin2::Maaslin2(
+          test_set, data.frame(pred) %>% data.frame(row.names = rownames(test_set)), output = tempdir(),
+          fixed_effects = 'pred',
+          normalization = 'NONE',
+          transform = "LOG",
+          min_abundance = 0.0,
+          min_prevalence = 0.0,
+          min_variance = 0.0,
+          plot_scatter = FALSE,
+          plot_heatmap = FALSE,
+          standardize = FALSE)$results
+        }, file = nullfile())
+        pval_tmp <-    data.frame(variable=names(abund3),pval=fit_data[match(names(test_set),fit_data$feature),"pval"])
+      }
+      pval_tmpe <<- pval_tmp
       pval_tmp <- pval_tmp %>%
         mutate(wrap=unique(samp2$wrap)[[i]],p_adjust=p.adjust(pval, p_adjust_method))
       pval <- rbind(pval,pval_tmp)
@@ -366,8 +391,6 @@ rabuplot <- function(phylo_ob,
     p <- p +  scale_fill_manual(values =cols,labels=legend_names) + guides(fill = guide_legend(title=legend_title, reverse = TRUE,override.aes = list(linetype=0, shape=16,color=rev(cols),size=5, bg="white")))
 
   }
-
- # legend_names <- molten_mean[molten_mean$variable %in% rev(molten_mean$colvar)[1],] %>% arrange(desc(value)) %>% ungroup %>% pull(predictor2) #order by highest abundant taxa
   if(bar_chart==TRUE){
     if(bar_chart_stacked==TRUE)
       p <-  ggplot(molten_mean,aes(x=factor(predictor2,levels=legend_names,labels=legend_names),y=value, fill=variable)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
@@ -398,7 +421,12 @@ rabuplot <- function(phylo_ob,
     p <- p+ facet_grid(~wrap,labeller = labeller(wrap=label_names),scales = "free", space = "free")+  theme(strip.background = element_blank())
     if(bar_chart==FALSE) p$layers[4:5] <- NULL
   }
-  if(italic_names==TRUE &  (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))   p <- p+ theme(axis.text.y=element_text(face = "italic"))
+  if(italic_names==TRUE &  (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))  {
+    if(type=="genus" | type=="family" | type=="species")
+      if(no_other_type==F)
+  p <- suppressWarnings(p+ theme(axis.text.y=element_text(face = c("plain", rep("italic",length(unique(molten$variable))-1)))))
+      else p <- p+ theme(axis.text.y=element_text(face = "italic"))
+}
   if(!is.null(color_by)) {
     # p <- p + facet_grid(~predictor2, scales = "free", space = "free")
     if(color_by=="genus" | color_by=="family" | color_by=="species") p <- p+ theme(legend.text=element_text(face = "italic"))
