@@ -234,8 +234,7 @@ rabuplot <- function(phylo_ob,
       pred <- samp2[index,predictor]
       # test with featureModel
       if(stats=="mgs_feature"){
-        if (!requireNamespace("metagenomeSeq", quietly = TRUE)) {
-    message("Pakckage metagenomeSeq not installed. This package is needed for mgs_feature option.") }
+        if (requireNamespace("metagenomeSeq", quietly = TRUE)) {
 
         mgs <- metagenomeSeq::newMRexperiment(counts = t(abund3))
         mgsp <- metagenomeSeq::cumNormStat(mgs)
@@ -245,6 +244,10 @@ rabuplot <- function(phylo_ob,
         else message("MGS FeatureModel")
         mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
         pval_tmp <- data.frame(variable=mgsfit$taxa,pval=mgsfit$pvalues)
+        }
+      else {
+            message("Pakckage metagenomeSeq not installed. This package is needed for mgs_feature option.")
+        }
       }
       if(stats=="non-parametric"){   #Kruskal-Wallis
         if(i==1) message("Non-parametric statistics")
@@ -261,10 +264,8 @@ rabuplot <- function(phylo_ob,
           summarize(pval = oneway.test(value ~ pred)$p.value, .groups = 'drop')
       }
       if(stats=="maaslin2"){   #Maaslin2
-        if (!requireNamespace("Maaslin2", quietly = TRUE)) {
-    message("Maaslin2 is not installed. Required for this test.")
-}
-
+        if (requireNamespace("Maaslin2", quietly = TRUE)) {
+    
         if(i==1) message("Maaslin2 statistics")
         test_set <- setNames(abund3, paste0('X', seq_along(abund3)))
         capture.output({fit_data <- Maaslin2::Maaslin2(
@@ -280,12 +281,17 @@ rabuplot <- function(phylo_ob,
           standardize = FALSE)$results
         }, file = nullfile())
         pval_tmp <-    data.frame(variable=names(abund3),pval=fit_data[match(names(test_set),fit_data$feature),"pval"])
+          }
+      else {
+      message("Maaslin2 is not installed. Required for this test.")
+}
       }
       pval_tmpe <<- pval_tmp
       pval_tmp <- pval_tmp %>%
         mutate(wrap=unique(samp2$wrap)[[i]],p_adjust=p.adjust(pval, p_adjust_method))
       pval <- rbind(pval,pval_tmp)
     }
+      
     }
     if(p_adjust) message(paste(p_adjust_method,"correction applied for",length(unique(pval$variable)),"taxa"))
   }
