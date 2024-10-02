@@ -234,6 +234,9 @@ rabuplot <- function(phylo_ob,
       pred <- samp2[index,predictor]
       # test with featureModel
       if(stats=="mgs_feature"){
+        if (!requireNamespace("metagenomeSeq", quietly = TRUE)) {
+    message("Pakckage metagenomeSeq not installed. This package is needed for mgs_feature option.") }
+
         mgs <- metagenomeSeq::newMRexperiment(counts = t(abund3))
         mgsp <- metagenomeSeq::cumNormStat(mgs)
         mgs <- metagenomeSeq::cumNorm(mgs, mgsp)
