@@ -261,7 +261,7 @@ rabuplot <- function(phylo_ob,
           summarize(pval = oneway.test(value ~ pred)$p.value, .groups = 'drop')
       }
       if(stats=="maaslin2"){   #Maaslin2
-        if (1requireNamespace("Maaslin2", quietly = TRUE)) {
+        if (!requireNamespace("Maaslin2", quietly = TRUE)) {
     message("Maaslin2 is not installed. Required for this test.")
 }
 
