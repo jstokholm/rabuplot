@@ -261,6 +261,10 @@ rabuplot <- function(phylo_ob,
           summarize(pval = oneway.test(value ~ pred)$p.value, .groups = 'drop')
       }
       if(stats=="maaslin2"){   #Maaslin2
+        if (1requireNamespace("Maaslin2", quietly = TRUE)) {
+    message("Maaslin2 is not installed. Required for this test.")
+}
+
         if(i==1) message("Maaslin2 statistics")
         test_set <- setNames(abund3, paste0('X', seq_along(abund3)))
         capture.output({fit_data <- Maaslin2::Maaslin2(
