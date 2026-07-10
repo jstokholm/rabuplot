@@ -53,7 +53,7 @@
 #' @param rank Taxonomic rank from tax_table, replaces "type", case insensitive; default is "genus".
 #' @param select_rank Taxonomic rank of the @select_taxa, replaces "select_type"; default is "genus".
 #'
-#' @import ggplot2 phyloseq metagenomeSeq dplyr tidyr RColorBrewer  lmerTest Maaslin2
+#' @import ggplot2 phyloseq dplyr tidyr RColorBrewer lmerTest grid
 #' @return A ggplot
 #' @export
 
@@ -107,13 +107,13 @@ rabuplot <- function(phylo_ob,
                      text_angle_x=0,
                      rank=NULL,
                      select_rank=NULL
-                     )
+)
 {
   if(!is.null(list_taxa) & is.null(N_taxa)) N_taxa = length(list_taxa)
   if(is.null(N_taxa) & is.null(list_taxa)) N_taxa=15
   if(!is.null(rank)) type <- rank
   if(!is.null(select_rank)) select_type <- select_rank
-  options(dplyr.summarise.inform = FALSE)
+  options(dplyr.summarize.inform = FALSE)
   if(bar_chart_stacked==TRUE) {
     bar_chart=TRUE
     p_val=FALSE
@@ -182,20 +182,20 @@ rabuplot <- function(phylo_ob,
     index <- !is.na(rownames(samp))
     if (!is.null(order_val))  index <- samp[,order_by] ==order_val
     abund <- abund[,order(-colSums(abund[index,]))]
-    if (By_median)  abund <- abund[,order(-apply(abund[index,], 2, median))]
+    if (By_median)  abund <- abund[,order(-apply(abund[index,], 2, stats::median))]
     if("unclassified" %in% unique_tax) abund <- abund[c(setdiff(names(abund), "unclassified"),"unclassified")] #Move unclassified to end
     if(N_taxa<length(unique_tax)) abund <- abund[-(length(unique_tax)-(length(unique_tax)-N_taxa)+1):-length(unique_tax)]
     if(no_other_type==FALSE) abund[, paste("Other",type)] <- rowSums(abund_all[,!names(abund_all) %in% names(abund)])
   }
   index <- !is.na(rownames(samp))
   if(!is.null(Strata)) index <- samp[,Strata]==Strata_val
-  samp2 <- samp %>% filter(index)
+  samp2 <- samp[index, , drop = FALSE]
   if(p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
     if(p_adjust_full ==TRUE | stats=="mgs_feature"){
-      abund2 <- abund_org %>% filter(index)
+      abund2 <- abund_org[index, , drop = FALSE]
       if(relative_abun==TRUE & stats!="mgs_feature") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
     }
-    else abund2 <- abund %>% filter(index)
+    else abund2 <- abund[index, , drop = FALSE]
     if(stats=="mgs_feature" & length(levels(factor(samp2[,predictor])))>2){
       stats="non-parametric"
       message("MGS not available for >2 predictors, switching to non-parametric")
@@ -212,73 +212,87 @@ rabuplot <- function(phylo_ob,
         message(paste0("Using ",facet_wrap," as mixed model group variable"))
         facet <- samp2[,"wrap"]
         pval <- cbind(abund2,pred,id,facet) %>% as_tibble() %>%
-        gather(variable, value,-"pred",-"id",-"facet") %>%
-        group_by(variable) %>%
-        summarize(pval = lmerTest::lmer(value ~ pred + factor(facet) + (1 | id)) %>% anova %>% filter(row_number()==1) %>% .$'Pr(>F)', .groups = 'drop')
+          tidyr::pivot_longer(cols = -c(pred, id, facet), names_to = "variable", values_to = "value") %>%
+          dplyr::group_by(variable) %>%
+          dplyr::summarize(pval = lmerTest::lmer(value ~ pred + factor(facet) + (1 | id)) %>% stats::anova %>% dplyr::filter(dplyr::row_number()==1) %>% .$'Pr(>F)', .groups = 'drop')
       }
       else {
         message(paste0("No group variable defined for mixed model in facet_wrap"))
         pval <- cbind(abund2,pred,id) %>% as_tibble() %>%
-        gather(variable, value,-"pred",-"id") %>%
-        group_by(variable) %>%
-        summarize(pval = lmerTest::lmer(value ~ pred + (1 | id)) %>% anova %>% .$'Pr(>F)', .groups = 'drop')
+          tidyr::pivot_longer(cols = -c(pred, id), names_to = "variable", values_to = "value") %>%
+          dplyr::group_by(variable) %>%
+          dplyr::summarize(pval = lmerTest::lmer(value ~ pred + (1 | id)) %>% stats::anova %>% .$'Pr(>F)', .groups = 'drop')
       }
-    pval <- pval %>%  mutate(wrap="Mixed",p_adjust=p.adjust(pval, p_adjust_method))
-    pval$wrap <- factor(pval$wrap,levels=c(levels(factor(samp2[,facet_wrap])),"Mixed"))
+      pval <- pval %>%  dplyr::mutate(wrap="Mixed",p_adjust=stats::p.adjust(pval, p_adjust_method))
+      pval$wrap <- factor(pval$wrap,levels=c(levels(factor(samp2[,facet_wrap])),"Mixed"))
     }
     else {
       pval <- data.frame()
-    for (i in 1:length(unique(samp2$wrap))){
-      index <- samp2$wrap==unique(samp2$wrap)[[i]]
-      abund3 <- abund2 %>% filter(index)
-      pred <- samp2[index,predictor]
-      # test with featureModel
-      if(stats=="mgs_feature"){
-        mgs <- metagenomeSeq::newMRexperiment(counts = t(abund3))
-        mgsp <- metagenomeSeq::cumNormStat(mgs)
-        mgs <- metagenomeSeq::cumNorm(mgs, mgsp)
-        mod <- model.matrix(~as.numeric(pred == unique(pred)[1]))
-        if(length(unique(samp2$wrap))>1) message(paste0("MGS FeatureModel for facet_wrap = ",unique(samp2$wrap)[[i]]))
-        else message("MGS FeatureModel")
-        mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
-        pval_tmp <- data.frame(variable=mgsfit$taxa,pval=mgsfit$pvalues)
+      for (i in 1:length(unique(samp2$wrap))){
+        index <- samp2$wrap==unique(samp2$wrap)[[i]]
+        abund3 <- abund2[index, , drop = FALSE]
+        pred <- samp2[index,predictor]
+        # test with featureModel
+        if(stats=="mgs_feature"){
+          if (!requireNamespace("metagenomeSeq", quietly = TRUE)) {
+            stop(
+              "Package 'metagenomeSeq' is required for this function. ",
+              "Install it with BiocManager::install('metagenomeSeq').",
+              call. = FALSE
+            )
+          }
+          mgs <- metagenomeSeq::newMRexperiment(counts = t(abund3))
+          mgsp <- metagenomeSeq::cumNormStat(mgs)
+          mgs <- metagenomeSeq::cumNorm(mgs, mgsp)
+          mod <- stats::model.matrix(~as.numeric(pred == unique(pred)[1]))
+          if(length(unique(samp2$wrap))>1) message(paste0("MGS FeatureModel for facet_wrap = ",unique(samp2$wrap)[[i]]))
+          else message("MGS FeatureModel")
+          mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
+          pval_tmp <- data.frame(variable=mgsfit$taxa,pval=mgsfit$pvalues)
+        }
+        if(stats=="non-parametric"){   #Kruskal-Wallis
+          if(i==1) message("Non-parametric statistics")
+          pval_tmp <- cbind(abund3,pred) %>% as_tibble() %>%
+            tidyr::pivot_longer(cols = -pred, names_to = "variable", values_to = "value") %>%
+            dplyr::group_by(variable) %>%
+            dplyr::summarize(pval = stats::kruskal.test(value ~ pred)$p.value, .groups = 'drop')
+        }
+        if(stats=="parametric"){
+          if(i==1) message("Parametric statistics")
+          pval_tmp <- cbind(abund3,pred) %>% as_tibble() %>%
+            tidyr::pivot_longer(cols = -pred, names_to = "variable", values_to = "value") %>%
+            dplyr::group_by(variable) %>%
+            dplyr::summarize(pval = stats::oneway.test(value ~ pred)$p.value, .groups = 'drop')
+        }
+        if(stats=="maaslin2"){   #Maaslin2
+          if (!requireNamespace("Maaslin2", quietly = TRUE)) {
+            stop(
+              "Package 'Maaslin2' is required for this function. ",
+              "Install it with BiocManager::install('Maaslin2').",
+              call. = FALSE
+            )
+          }
+          if(i==1) message("Maaslin2 statistics")
+          test_set <- setNames(abund3, paste0('X', seq_along(abund3)))
+          capture.output({fit_data <- Maaslin2::Maaslin2(
+            test_set, data.frame(pred) %>% data.frame(row.names = rownames(test_set)), output = tempdir(),
+            fixed_effects = 'pred',
+            normalization = 'NONE',
+            transform = "LOG",
+            min_abundance = 0.0,
+            min_prevalence = 0.0,
+            min_variance = 0.0,
+            plot_scatter = FALSE,
+            plot_heatmap = FALSE,
+            standardize = FALSE)$results
+          }, file = nullfile())
+          pval_tmp <-    data.frame(variable=names(abund3),pval=fit_data[match(names(test_set),fit_data$feature),"pval"])
+        }
+        pval_tmpe <<- pval_tmp
+        pval_tmp <- pval_tmp %>%
+          dplyr::mutate(wrap=unique(samp2$wrap)[[i]],p_adjust=stats::p.adjust(pval, p_adjust_method))
+        pval <- rbind(pval,pval_tmp)
       }
-      if(stats=="non-parametric"){   #Kruskal-Wallis
-        if(i==1) message("Non-parametric statistics")
-        pval_tmp <- cbind(abund3,pred) %>% as_tibble() %>%
-          gather(variable, value,-"pred") %>%
-          group_by(variable) %>%
-          summarize(pval = kruskal.test(value ~ pred)$p.value, .groups = 'drop')
-      }
-      if(stats=="parametric"){
-        if(i==1) message("Parametric statistics")
-        pval_tmp <- cbind(abund3,pred) %>% as_tibble() %>%
-          gather(variable, value,-"pred") %>%
-          group_by(variable) %>%
-          summarize(pval = oneway.test(value ~ pred)$p.value, .groups = 'drop')
-      }
-      if(stats=="maaslin2"){   #Maaslin2
-        if(i==1) message("Maaslin2 statistics")
-        test_set <- setNames(abund3, paste0('X', seq_along(abund3)))
-        capture.output({fit_data <- Maaslin2::Maaslin2(
-          test_set, data.frame(pred) %>% data.frame(row.names = rownames(test_set)), output = tempdir(),
-          fixed_effects = 'pred',
-          normalization = 'NONE',
-          transform = "LOG",
-          min_abundance = 0.0,
-          min_prevalence = 0.0,
-          min_variance = 0.0,
-          plot_scatter = FALSE,
-          plot_heatmap = FALSE,
-          standardize = FALSE)$results
-        }, file = nullfile())
-        pval_tmp <-    data.frame(variable=names(abund3),pval=fit_data[match(names(test_set),fit_data$feature),"pval"])
-      }
-      pval_tmpe <<- pval_tmp
-      pval_tmp <- pval_tmp %>%
-        mutate(wrap=unique(samp2$wrap)[[i]],p_adjust=p.adjust(pval, p_adjust_method))
-      pval <- rbind(pval,pval_tmp)
-    }
     }
     if(p_adjust) message(paste(p_adjust_method,"correction applied for",length(unique(pval$variable)),"taxa"))
   }
@@ -291,69 +305,163 @@ rabuplot <- function(phylo_ob,
   if(!is.null(facet_wrap)){
     subset$wrap <-  as.factor(subset[,facet_wrap])
     if(!is.null(Strata))
-      molten <- subset[,c("ID",paste(bacteria),"predictor2",Strata,"wrap")] %>% gather(variable, value,-"predictor2",-"ID",-all_of(Strata),-"wrap")
+      molten <-subset[, c("ID", paste(bacteria), "predictor2", Strata, "wrap")] %>% tidyr::pivot_longer(cols = -c(predictor2, ID, dplyr::all_of(Strata), wrap), names_to = "variable", values_to = "value")
     else
-      molten <- subset[,c("ID",paste(bacteria),"predictor2","wrap")] %>% gather(variable, value,-"predictor2",-"ID",-"wrap")
+      molten <- subset[, c("ID", paste(bacteria), "predictor2", "wrap")] %>% tidyr::pivot_longer(cols = -c(ID, predictor2, wrap), names_to = "variable", values_to = "value")
   }
   if(is.null(facet_wrap)){
     if(!is.null(Strata))
-      molten <- subset[,c("ID",paste(bacteria),"predictor2",Strata)] %>% gather(variable, value,-"predictor2",-"ID",-all_of(Strata))
+      molten <- subset[, c("ID", bacteria, "predictor2", Strata)] %>% tidyr::pivot_longer(cols = -c(ID, predictor2, dplyr::all_of(Strata)), names_to = "variable", values_to = "value")
     else
-      molten <- subset[,c("ID",paste(bacteria),"predictor2")] %>% gather(variable, value,-"predictor2",-"ID")
+      molten <- subset[, c("ID", bacteria, "predictor2")] %>% tidyr::pivot_longer(cols = -c(ID, predictor2), names_to = "variable", values_to = "value")
   }
-  if(!is.null(color_by)){
-    molten[molten$variable != paste("Other",type),"colvar"] <- molten %>% dplyr::filter(variable != paste("Other",type)) %>% .[,"variable"] %>% match(tax[,type]) %>% tax[.,color_by] %>% as.character
-    molten[molten$variable == paste("Other",type),"colvar"] <- paste("Other",color_by) %>% as.character
+  # Assign the color-grouping variable
+  if (!is.null(color_by)) {
+    other_label <- paste("Other", type)
+
+    non_other <- molten$variable != other_label
+
+    molten$colvar <- NA_character_
+
+    tax_match <- match(
+      molten$variable[non_other],
+      tax[, type]
+    )
+
+    molten$colvar[non_other] <- as.character(
+      tax[tax_match, color_by]
+    )
+
+    molten$colvar[!non_other] <- paste("Other", color_by)
   }
 
-  molten$variable <- gsub('_',' ',molten$variable)
+  # Clean displayed variable names
+  molten$variable <- gsub("_", " ", molten$variable)
 
-  if(order)   ordered <- unique(molten$variable) #level order
-  if(!order)   ordered <-sort(unique(molten$variable))#level order alphabetically
+  # Set variable order
+  ordered <- unique(molten$variable)
 
-  molten$variable <- factor(molten$variable, levels=ordered)
-  if(is.null(color_by))  molten$colvar <- molten$variable
-  if(!is.null(Strata))  molten <- molten[which(molten[,Strata]==Strata_val), ]
-
-  if(is.null(colors)){
-    cols  <- c(brewer.pal(8,"Set1"), brewer.pal(7,"Dark2"),brewer.pal(7,"Set2"),brewer.pal(12,"Set3"),brewer.pal(7,"Accent"),brewer.pal(12,"Paired"),"gray")
-    cols <- cols[1:length(levels(factor(molten$predictor2)))]
+  if (!order) {
+    ordered <- sort(ordered)
   }
-  if(!is.null(colors)) cols <- colors
 
-  if(bar_chart==TRUE & bar_chart_stacked==FALSE & is.null(legend_names))  legend_names <- as.character(levels(factor(molten$predictor2)))
-  if(is.null(legend_names))  legend_names <- as.character(levels(factor(molten$predictor2)))
-  ordered2<- rev(unique(molten$colvar))
-  if(reverse){
-    if(bar_chart==FALSE) {
-      molten$predictor2 <- factor(molten$predictor2, levels=rev(levels(molten$predictor2)))#manual faceting for levels;
+  molten$variable <- factor(
+    molten$variable,
+    levels = ordered
+  )
+
+  # Use the plotted variable itself when no alternative color grouping is supplied
+  if (is.null(color_by)) {
+    molten$colvar <- as.character(molten$variable)
+  }
+
+  # Filter by strata
+  if (!is.null(Strata)) {
+    molten <- molten[molten[[Strata]] == Strata_val, , drop = FALSE]
+  }
+
+  # Define the full default palette once
+  default_cols <- c(
+    RColorBrewer::brewer.pal(8, "Set1"),
+    RColorBrewer::brewer.pal(7, "Dark2"),
+    RColorBrewer::brewer.pal(7, "Set2"),
+    RColorBrewer::brewer.pal(12, "Set3"),
+    RColorBrewer::brewer.pal(7, "Accent"),
+    RColorBrewer::brewer.pal(12, "Paired"),
+    "gray"
+  )
+
+  # Predictor levels and legend labels
+  predictor_levels <- levels(factor(molten$predictor2))
+
+  if (is.null(legend_names)) {
+    legend_names <- predictor_levels
+  }
+
+  # Initial color selection
+  if (is.null(colors)) {
+    cols <- default_cols[seq_len(length(predictor_levels))]
+  } else {
+    cols <- colors
+  }
+
+  # Preserve the desired colvar ordering before converting to a factor
+  ordered2 <- rev(unique(as.character(molten$colvar)))
+
+  # Reverse ordering where requested
+  if (reverse) {
+    if (!bar_chart) {
+      molten$predictor2 <- factor(
+        molten$predictor2,
+        levels = rev(predictor_levels)
+      )
+
       legend_names <- rev(legend_names)
       cols <- rev(cols)
-    }
-    if(bar_chart==TRUE) {
-      molten$colvar <- factor(molten$colvar, levels=rev(levels(factor(molten$colvar))))#manual faceting for levels;
-      molten$variable <- factor(molten$variable, levels=rev(levels(factor(molten$variable))))
+    } else {
+      molten$colvar <- factor(
+        molten$colvar,
+        levels = rev(unique(as.character(molten$colvar)))
+      )
+
+      molten$variable <- factor(
+        molten$variable,
+        levels = rev(levels(molten$variable))
+      )
+
       cols <- rev(cols)
-      ordered2<- rev(ordered2)
+      ordered2 <- rev(ordered2)
     }
   }
 
-  if(bar_chart){
-    log=FALSE
-    cols  <- c(brewer.pal(8,"Set1"), brewer.pal(7,"Dark2"),brewer.pal(7,"Set2"),brewer.pal(12,"Set3"),brewer.pal(7,"Accent"),brewer.pal(12,"Paired"),"gray")
-    #  ordered <- levels(factor(molten$colvar))
-    if(is.null(color_by) & bar_chart_stacked==FALSE)   cols <- cols[1:length(levels(factor(molten$predictor2)))]
+  if (bar_chart) {
+    log <- FALSE
 
-    else cols <- cols[c(1:length(levels(factor(molten$colvar)))-1,length(cols))]
-    if(!is.null(colors)) cols <- colors
-    if(is.null(color_by) & reverse==FALSE) cols <- rev(cols)
-    if(!is.null(color_by) & reverse==TRUE) cols <- rev(cols)
-    if(is.null(facet_wrap))  molten$wrap <- ""
+    colvar_levels <- levels(factor(molten$colvar))
+
+    # Select bar-chart colors only when custom colors were not supplied
+    if (is.null(colors)) {
+      if (is.null(color_by) && !bar_chart_stacked) {
+        cols <- default_cols[seq_len(length(predictor_levels))]
+      } else {
+        n_colvar <- length(colvar_levels)
+
+        if (n_colvar <= 1L) {
+          cols <- tail(default_cols, 1L)
+        } else {
+          cols <- c(
+            default_cols[seq_len(n_colvar - 1L)],
+            tail(default_cols, 1L)
+          )
+        }
+      }
+
+      # Preserve the original reversal behavior
+      if (
+        (is.null(color_by) && !reverse) ||
+        (!is.null(color_by) && reverse)
+      ) {
+        cols <- rev(cols)
+      }
+    }
+
+    if (is.null(facet_wrap)) {
+      molten$wrap <- ""
+    }
+
     molten_mean <- molten %>%
-      dplyr::group_by(variable,predictor2,wrap,colvar) %>%
-      dplyr::summarize(value = mean(value))
-    molten_mean$colvar <- factor(molten_mean$colvar, levels=ordered2)
+      dplyr::group_by(variable, predictor2, wrap, colvar) %>%
+      dplyr::summarise(
+        value = mean(value, na.rm = TRUE),
+        .groups = "drop"
+      )
+
+    molten_mean$colvar <- factor(
+      molten_mean$colvar,
+      levels = ordered2
+    )
   }
+
   #Calculate pvalue for outcomes
   if(p_val==TRUE & ((bar_chart==TRUE & bar_chart_stacked==FALSE) | bar_chart==FALSE) & is.null(color_by)){
     if(is.null(facet_wrap)) molten$wrap <- ""
@@ -374,9 +482,9 @@ rabuplot <- function(phylo_ob,
     }
 
     if(stat_out){
-      median_iqr <<- molten %>% dplyr::group_by(variable, predictor2) %>% dplyr::summarize( N = length(value),median = median(value)*100,Q1=quantile(value, 1/4)*100,Q3=quantile(value, 3/4)*100, IQR = IQR(value)) %>% as.data.frame
+      median_iqr <<- molten %>% dplyr::group_by(variable, predictor2) %>% dplyr::summarize( N = length(value),median = stats::median(value)*100,Q1=stats::quantile(value, 1/4)*100,Q3=stats::quantile(value, 3/4)*100, IQR = stats::IQR(value)) %>% as.data.frame
       pval_out <<- pval
-      mean_sd <<- molten %>% dplyr::group_by(variable, predictor2) %>% dplyr::summarize( N = length(value),mean = mean(value)*100,sd=sd(value)*100) %>% as.data.frame
+      mean_sd <<- molten %>% dplyr::group_by(variable, predictor2) %>% dplyr::summarize( N = length(value),mean = mean(value)*100,sd=stats::sd(value)*100) %>% as.data.frame
     }
   }
   if(bar_chart==FALSE){
@@ -385,22 +493,27 @@ rabuplot <- function(phylo_ob,
     ordered <- levels(factor(molten$colvar))
     p <- ggplot(molten, aes(x=variable, y=value, fill=predictor2)) +
       {if(violin){geom_violin(scale = violin_scale,width = 0.65, position=position_dodge(width=0.9),size=1, color="#00000000")} else {geom_boxplot(width = 0.55, position=position_dodge(width=0.8),size=0.3,outlier.size = 0,outlier.color = "grey")}}+
-      {if(violin){stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="black", position=position_dodge(width=0.9))} else {stat_summary(fun=median, fun.min = min, fun.max = max, geom="point", size=0.8, color="#00000000", position=position_dodge(width=0.9))}}+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),legend.text=element_text(size=12),legend.key.size = unit(0.5, "cm"))+ coord_flip() +xlab(NULL)+ylab(xlabs)+ggtitle(main)
+      {if(violin){stat_summary(fun=stats::median, fun.min = min, fun.max = max, geom="point", size=0.8, color="black", position=position_dodge(width=0.9))} else {stat_summary(fun=stats::median, fun.min = min, fun.max = max, geom="point", size=0.8, color="#00000000", position=position_dodge(width=0.9))}}+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),legend.text=element_text(size=12),legend.key.size = grid::unit(0.5, "cm"))+ coord_flip() +xlab(NULL)+ylab(xlabs)+ggtitle(main)
     if(length(unique(molten$variable))>1) p <- p+ geom_vline(xintercept=seq(1.5, length(unique(molten$variable))-0.5, 1),lwd=0.2, colour="grey")
 
     p <- p +  scale_fill_manual(values =cols,labels=legend_names) + guides(fill = guide_legend(title=legend_title, reverse = TRUE,override.aes = list(linetype=0, shape=16,color=rev(cols),size=5, bg="white")))
 
   }
   if(bar_chart==TRUE){
+    molten_mean_1 <<- molten_mean
+    legend_names_1 <<- legend_names
+    cols_1 <<- cols
+    ordered_1 <<-ordered
     if(bar_chart_stacked==TRUE)
-      p <-  ggplot(molten_mean,aes(x=factor(predictor2,levels=legend_names,labels=legend_names),y=value, fill=variable)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
+      if(!is.null(color_by)) cols <- rev(cols)
+      p <-  ggplot(molten_mean,aes(x=factor(predictor2,levels=legend_names,labels=legend_names),y=value, fill=variable)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = grid::unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
     if(bar_chart_stacked==FALSE){
       if(!is.null(color_by)) p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=colvar,group=wrap))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=ordered2)+ guides(fill = guide_legend(title=color_by))
       else {
         p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=predictor2))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=legend_names)+ guides(fill = guide_legend(title=legend_title))
       }
       if(length(unique(molten_mean$variable))>1) p <- p+ geom_vline(xintercept=seq(1.5, length(unique(molten_mean$variable))-0.5, 1),lwd=0.2, colour="grey")
-      p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ theme(strip.background = element_blank()) +coord_flip()
+      p <-  p+ theme_bw()  + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = grid::unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main)+ theme(strip.background = element_blank()) +coord_flip()
     }
   }
   if(!is.null(facet_wrap))   {
@@ -409,7 +522,7 @@ rabuplot <- function(phylo_ob,
     if(facet_n==TRUE){
       label_names <- samp2 %>%
         dplyr::group_by(get(facet_wrap)) %>%
-        dplyr::summarise(n = n()) %>%
+        dplyr::summarize(n = dplyr::n()) %>%
         dplyr::mutate(pasted_label = paste0(levels(factor(samp2[,facet_wrap])), ", n = ", n))
       label_names <- as.character(label_names$pasted_label)
     }
@@ -424,14 +537,14 @@ rabuplot <- function(phylo_ob,
   if(italic_names==TRUE &  (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE)))  {
     if(type=="genus" | type=="family" | type=="species")
       if(no_other_type==F)
-  p <- suppressWarnings(p+ theme(axis.text.y=element_text(face = c("plain", rep("italic",length(unique(molten$variable))-1)))))
-      else p <- p+ theme(axis.text.y=element_text(face = "italic"))
-}
+        p <- suppressWarnings(p+ theme(axis.text.y=element_text(face = c("plain", rep("italic",length(unique(molten$variable))-1)))))
+    else p <- p+ theme(axis.text.y=element_text(face = "italic"))
+  }
   if(!is.null(color_by)) {
     # p <- p + facet_grid(~predictor2, scales = "free", space = "free")
     if(color_by=="genus" | color_by=="family" | color_by=="species") p <- p+ theme(legend.text=element_text(face = "italic"))
     if(color_by==type & bar_chart_stacked==FALSE ) p <- p+theme(legend.position="none")
-      }
+  }
 
   if(p_val==TRUE){
     if(log==FALSE){
@@ -469,11 +582,11 @@ rabuplot <- function(phylo_ob,
     if(p_val==TRUE){
       if(p_adjust==TRUE) {
         if(max(molten_mean$value)<=1 & max(molten_mean$value)>=0.75) p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","25%","50%","75%","100%", "P-value", "q-value"))
-      if(max(molten_mean$value)<0.75 & max(molten_mean$value)>=0.50) p <- p + scale_y_continuous(breaks=c(0,.25,.50,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","25%","50%", "P-value", "q-value"))
-      if(max(molten_mean$value)<0.50 & max(molten_mean$value)>=0.25) p <- p + scale_y_continuous(breaks=c(0,.1,.2,.3,.4,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","10%","20%","30%","40%", "P-value", "q-value"))
-      if(max(molten_mean$value)<0.25) p <- p + scale_y_continuous(breaks=c(0,.05,.1,.15,.2,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","5%","10%","15%","20%", "P-value", "q-value"))
+        if(max(molten_mean$value)<0.75 & max(molten_mean$value)>=0.50) p <- p + scale_y_continuous(breaks=c(0,.25,.50,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","25%","50%", "P-value", "q-value"))
+        if(max(molten_mean$value)<0.50 & max(molten_mean$value)>=0.25) p <- p + scale_y_continuous(breaks=c(0,.1,.2,.3,.4,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","10%","20%","30%","40%", "P-value", "q-value"))
+        if(max(molten_mean$value)<0.25) p <- p + scale_y_continuous(breaks=c(0,.05,.1,.15,.2,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","5%","10%","15%","20%", "P-value", "q-value"))
       }
-            if(p_adjust==FALSE) {
+      if(p_adjust==FALSE) {
         if(max(molten_mean$value)<=1 & max(molten_mean$value)>=0.75)  p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,max(molten_mean$value)*1.07),labels=c("0%","25%","50%","75%","100%", "P-value"))
         if(max(molten_mean$value)<0.75 & max(molten_mean$value)>=0.50) p <- p + scale_y_continuous(breaks=c(0,.25,.50,max(molten_mean$value)*1.07),labels=c("0%","25%","50%", "P-value"))
         if(max(molten_mean$value)<0.50 & max(molten_mean$value)>=0.25) p <- p + scale_y_continuous(breaks=c(0,.1,.2,.3,.4,max(molten_mean$value)*1.07),labels=c("0%","10%","20%","30%","40%", "P-value"))
@@ -488,7 +601,7 @@ rabuplot <- function(phylo_ob,
   if(no_legends) p <- p + theme(legend.position="none")
   if(no_names)  p <- p + theme(axis.text.y=element_blank(),axis.ticks.y=element_blank())
   stars.pval <- function (p.value)
-  {    unclass(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**",  "*", "NS")))
+  {    unclass(stats::symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**",  "*", "NS")))
   }
   if(p_stars==TRUE & p_val==TRUE) p <- p + geom_text(data=pval,aes(x=variable,y=y,label=paste(stars.pval(pval))) ,size=3,hjust=1)
 
@@ -500,8 +613,8 @@ rabuplot <- function(phylo_ob,
       p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust>=0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
     }
     if(stats=="mixed" & !is.null(facet_wrap)){
-     if(bar_chart==FALSE) p <- p + expand_limits(y = 2)
-     if(bar_chart==TRUE) p <- p + expand_limits(y = max(molten_mean2$value))
+      if(bar_chart==FALSE) p <- p + expand_limits(y = 2)
+      if(bar_chart==TRUE) p <- p + expand_limits(y = max(molten_mean2$value))
     }
   }
   p
