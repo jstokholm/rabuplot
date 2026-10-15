@@ -9,6 +9,8 @@ rabuplot(
   predictor = "none",
   type = "genus",
   relative_abun = TRUE,
+  min_abund = 0,
+  min_prev = 0,
   id = NULL,
   xlabs = "Relative abundance (\%)",
   ylabs = "Average relative abundance",
@@ -54,7 +56,12 @@ rabuplot(
   order_val = NULL,
   text_angle_x = 0,
   rank = NULL,
-  select_rank = NULL
+  select_rank = NULL,
+  volcano_plot = FALSE,
+  p_cutoff = 0.05,
+  adj_p_cutoff = 0.05,
+  label_taxa = TRUE,
+  top_n_labels = 30
 )
 }
 \arguments{
@@ -65,6 +72,10 @@ rabuplot(
 \item{type}{Taxonomic rank from tax_table, case insensitive; default is "genus".}
 
 \item{relative_abun}{Use relative abundances, else absolute; default is TRUE.}
+
+\item{min_abund}{Minimum relative abundance threshold (e.g., 0.001 for 0.1%); default is 0.}
+
+\item{min_prev}{Minimum prevalence fraction threshold (fraction of samples where taxon exceeds min_abund, e.g., 0.1 for 10% of samples); default is 0.}
 
 \item{id}{Define id variable for mixed models.}
 
@@ -114,11 +125,11 @@ rabuplot(
 
 \item{p_stars}{Shows stars instead of p-values; default is FALSE.}
 
-\item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2"; default is "non-parametric".}
+\item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2", "ancombc2"; default is "non-parametric".}
 
 \item{p_adjust}{adjust p-values; default is "FALSE.}
 
-\item{p_adjust_method}{options: "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr"; default is "fdr".}
+\item{p_adjust_method}{options: "holm", "hochberg", "hommel", "bonferroni", "bh", "by", "fdr"; default is "fdr".}
 
 \item{p_adjust_full}{correction applied for all taxa in the dataset; default is FALSE.}
 
@@ -157,6 +168,16 @@ rabuplot(
 \item{rank}{Taxonomic rank from tax_table, replaces "type", case insensitive; default is "genus".}
 
 \item{select_rank}{Taxonomic rank of the @select_taxa, replaces "select_type"; default is "genus".}
+
+\item{volcano_plot}{Produce volcano plot (log2FC vs -log10 P-value); default is FALSE.}
+
+\item{p_cutoff}{P-value significance threshold cutoff line for volcano plot; default is 0.05.}
+
+\item{adj_p_cutoff}{q-value threshold cutoff line for volcano plot (used when p_adjust=TRUE); default is 0.05.}
+
+\item{label_taxa}{Display bacterial names on significant points in volcano plot; default is TRUE.}
+
+\item{top_n_labels}{Max number of significant bacterial labels to plot on volcano plot; default is 15.}
 }
 \value{
 A ggplot

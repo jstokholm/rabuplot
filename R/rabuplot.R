@@ -6,6 +6,8 @@
 #' @param predictor Predictor of interest for statistics/plotting in sample_data.
 #' @param type Taxonomic rank from tax_table, case insensitive; default is "genus".
 #' @param relative_abun Use relative abundances, else absolute; default is TRUE.
+#' @param min_abund Minimum relative abundance threshold (e.g., 0.001 for 0.1%); default is 0.
+#' @param min_prev Minimum prevalence fraction threshold (fraction of samples where taxon exceeds min_abund, e.g., 0.1 for 10% of samples); default is 0.
 #' @param id Define id variable for mixed models.
 #' @param xlabs X-axis label
 #' @param ylabs Y-axis label
@@ -30,9 +32,9 @@
 #' @param stat_out Outputs a data.frame with statistics to Global environment; default is FALSE.
 #' @param p_val Displays p-values on plot; default is TRUE.
 #' @param p_stars Shows stars instead of p-values; default is FALSE.
-#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2"; default is "non-parametric".
+#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2", "ancombc2"; default is "non-parametric".
 #' @param p_adjust adjust p-values; default is "FALSE.
-#' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "BH", "BY", "fdr"; default is "fdr".
+#' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "bh", "by", "fdr"; default is "fdr".
 #' @param p_adjust_full correction applied for all taxa in the dataset; default is FALSE.
 #' @param colors define list of colors for plot. If not color brewer will be used; default is NULL.
 #' @param color_by define taxonomic rank to color by; default is NULL.
@@ -52,8 +54,14 @@
 #' @param text_angle_x Choose value for rotation of axis-text; default is 0.
 #' @param rank Taxonomic rank from tax_table, replaces "type", case insensitive; default is "genus".
 #' @param select_rank Taxonomic rank of the @select_taxa, replaces "select_type"; default is "genus".
+#' @param volcano_plot Produce volcano plot (log2FC vs -log10 P-value); default is FALSE.
+#' @param p_cutoff P-value significance threshold cutoff line for volcano plot; default is 0.05.
+#' @param adj_p_cutoff q-value threshold cutoff line for volcano plot (used when p_adjust=TRUE); default is 0.05.
+#' @param label_taxa Display bacterial names on significant points in volcano plot; default is TRUE.
+#' @param top_n_labels Max number of significant bacterial labels to plot on volcano plot; default is 15.
 #'
 #' @import ggplot2 phyloseq dplyr tidyr RColorBrewer lmerTest grid
+#' @importFrom ggrepel geom_text_repel
 #' @return A ggplot
 #' @export
 
@@ -61,6 +69,8 @@ rabuplot <- function(phylo_ob,
                      predictor="none",
                      type="genus",
                      relative_abun=TRUE,
+                     min_abund=0,
+                     min_prev=0,
                      id=NULL,
                      xlabs = "Relative abundance (%)",
                      ylabs = "Average relative abundance",
@@ -106,14 +116,33 @@ rabuplot <- function(phylo_ob,
                      order_val=NULL,
                      text_angle_x=0,
                      rank=NULL,
-                     select_rank=NULL
+                     select_rank=NULL,
+                     volcano_plot=FALSE,
+                     p_cutoff=0.05,
+                     adj_p_cutoff=0.05,
+                     label_taxa=TRUE,
+                     top_n_labels=30
 )
 {
+  if (!is.numeric(min_abund) || min_abund < 0 || min_abund > 1) {
+    stop("`min_abund` must be a numeric value between 0 and 1.")
+  }
+  if (!is.numeric(min_prev) || min_prev < 0 || min_prev > 1) {
+    stop("`min_prev` must be a numeric value between 0 and 1.")
+  }
+
   if(!is.null(list_taxa) & is.null(N_taxa)) N_taxa = length(list_taxa)
   if(is.null(N_taxa) & is.null(list_taxa)) N_taxa=15
   if(!is.null(rank)) type <- rank
   if(!is.null(select_rank)) select_type <- select_rank
   options(dplyr.summarize.inform = FALSE)
+  if(volcano_plot == TRUE) {
+    p_val = TRUE
+    bar_chart = FALSE
+    bar_chart_stacked = FALSE
+    if (main == "Relative abundance plot") main <- ""
+    if (xlabs == "Relative abundance (%)") xlabs <- "log2FC"
+  }
   if(bar_chart_stacked==TRUE) {
     bar_chart=TRUE
     p_val=FALSE
@@ -152,19 +181,48 @@ rabuplot <- function(phylo_ob,
     tax <- tax[rownames(tax) %in% OTU_index,]
     samp <- samp[rownames(samp) %in% index,]
   }
-
-  list <-as.character(tax[,type])
-  unique_tax <- unique(list)
+  taxa_vec <- as.character(tax[,type])
+  unique_tax <- unique(taxa_vec)
 
   abund <- as.data.frame(matrix(rep(0,(length(unique_tax)*nrow(otu_mat))),ncol=length(unique_tax)))
   row.names(abund) <- row.names(otu_mat)
   names(abund) <- unique_tax
   for(i in names(abund)){
-    if(is.array(otu_mat[,list==i]))  abund[,i] <- rowSums(otu_mat[,list== i])
-    else   abund[,i] <- otu_mat[,list== i]
+    if(is.array(otu_mat[,taxa_vec==i]))  abund[,i] <- rowSums(otu_mat[,taxa_vec== i])
+    else   abund[,i] <- otu_mat[,taxa_vec== i]
   }
   abund_org <- abund
   if(relative_abun==TRUE) abund <- apply(abund,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
+
+  if (is.null(facet_wrap) && (min_abund > 0 || min_prev > 0)) {
+    n_taxa_before <- ncol(abund)
+    rel_matrix <- if (relative_abun) abund else apply(abund_org, 1, function(x) x / sum(x)) %>% t %>% as.data.frame()
+
+    n_samples <- nrow(rel_matrix)
+    prevalence_frac <- colSums(rel_matrix > min_abund) / n_samples
+    keep_taxa_filter <- prevalence_frac >= min_prev
+
+    abund <- abund[, keep_taxa_filter, drop = FALSE]
+    abund_org <- abund_org[, keep_taxa_filter, drop = FALSE]
+    unique_tax <- names(abund)
+
+    n_taxa_after <- ncol(abund)
+    n_removed <- n_taxa_before - n_taxa_after
+
+    message(sprintf(
+      "[rabuplot]: Global filter applied (min_abund = %g, min_prev = %.1f%%). Removed %d / %d taxa (%d taxa remaining).",
+      min_abund,
+      min_prev * 100,
+      n_removed,
+      n_taxa_before,
+      n_taxa_after
+    ))
+
+    if (n_taxa_after == 0) {
+      stop("[rabuplot Error]: All taxa were removed by the specified `min_abund` and `min_prev` thresholds. Please relax your criteria.")
+    }
+  }
+
   abund_all <- abund
   if (is.null(list_taxa) & !is.null(select_taxa)) {
     list_taxa <- NULL
@@ -178,7 +236,7 @@ rabuplot <- function(phylo_ob,
     unique_tax <- names(abund)
   }
 
-  if(length(abund)>1){
+  if(length(abund)>1 && !volcano_plot){
     index <- !is.na(rownames(samp))
     if (!is.null(order_val))  index <- samp[,order_by] ==order_val
     abund <- abund[,order(-colSums(abund[index,]))]
@@ -191,11 +249,12 @@ rabuplot <- function(phylo_ob,
   if(!is.null(Strata)) index <- samp[,Strata]==Strata_val
   samp2 <- samp[index, , drop = FALSE]
   if(p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
-    if(p_adjust_full ==TRUE | stats=="mgs_feature"){
+    if(p_adjust_full ==TRUE | stats=="mgs_feature" | stats=="ancombc2" | volcano_plot==TRUE){
       abund2 <- abund_org[index, , drop = FALSE]
-      if(relative_abun==TRUE & stats!="mgs_feature") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
+      if(relative_abun==TRUE & stats!="mgs_feature" & stats!="ancombc2") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
     }
     else abund2 <- abund[index, , drop = FALSE]
+
     if(stats=="mgs_feature" & length(levels(factor(samp2[,predictor])))>2){
       stats="non-parametric"
       message("MGS not available for >2 predictors, switching to non-parametric")
@@ -231,6 +290,30 @@ rabuplot <- function(phylo_ob,
       for (i in 1:length(unique(samp2$wrap))){
         index <- samp2$wrap==unique(samp2$wrap)[[i]]
         abund3 <- abund2[index, , drop = FALSE]
+
+        if (!is.null(facet_wrap) && (min_abund > 0 || min_prev > 0)) {
+          n_facet_samples <- nrow(abund3)
+          n_taxa_before_facet <- ncol(abund3)
+
+          # Compute prevalence within this facet subset
+          rel_facet_mat <- if(relative_abun) abund3 else apply(abund3, 1, function(x) x / sum(x)) %>% t %>% as.data.frame()
+          facet_prev_frac <- colSums(rel_facet_mat > min_abund) / n_facet_samples
+          keep_facet_taxa <- facet_prev_frac >= min_prev
+
+          # Subset current facet matrix
+          abund3 <- abund3[, keep_facet_taxa, drop = FALSE]
+
+          message(sprintf(
+            "[rabuplot]: Facet '%s' filter (min_abund = %g, min_prev = %.1f%%): Kept %d / %d taxa.",
+            unique(samp2$wrap)[[i]], min_abund, min_prev * 100, ncol(abund3), n_taxa_before_facet
+          ))
+        }
+
+        if (ncol(abund3) == 0) {
+          warning(sprintf("No taxa passed min_abund/min_prev filters in facet '%s'. Skipping facet stats.", unique(samp2$wrap)[[i]]))
+          next
+        }
+
         pred <- samp2[index,predictor]
         # test with featureModel
         if(stats=="mgs_feature"){
@@ -248,7 +331,18 @@ rabuplot <- function(phylo_ob,
           if(length(unique(samp2$wrap))>1) message(paste0("MGS FeatureModel for facet_wrap = ",unique(samp2$wrap)[[i]]))
           else message("MGS FeatureModel")
           mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
-          pval_tmp <- data.frame(variable=mgsfit$taxa,pval=mgsfit$pvalues)
+          if (isS4(mgsfit)) {
+            mgs_taxa <- slot(mgsfit, "taxa")
+            mgs_pvals <- slot(mgsfit, "pvalues")
+          } else if (is.list(mgsfit)) {
+            mgs_taxa <- mgsfit$taxa
+            mgs_pvals <- mgsfit$pvalues
+          } else {
+            mgs_taxa <- rownames(abund3) # or colnames depending on orientation
+            mgs_pvals <- metagenomeSeq::MRpvalues(mgsfit)
+          }
+          pval_tmp <- data.frame(variable = mgs_taxa, pval = mgs_pvals)
+
         }
         if(stats=="non-parametric"){   #Kruskal-Wallis
           if(i==1) message("Non-parametric statistics")
@@ -288,13 +382,265 @@ rabuplot <- function(phylo_ob,
           }, file = nullfile())
           pval_tmp <-    data.frame(variable=names(abund3),pval=fit_data[match(names(test_set),fit_data$feature),"pval"])
         }
-        pval_tmpe <<- pval_tmp
+
+        if(stats=="ancombc2"){
+          if (!requireNamespace("ANCOMBC", quietly = TRUE)) {
+            stop("Package 'ANCOMBC' is required. Install via BiocManager::install('ANCOMBC').", call. = FALSE)
+          }
+          if (!requireNamespace("microbiome", quietly = TRUE)) {
+            stop("Package 'microbiome' is required by ANCOM-BC2. Install via BiocManager::install('microbiome').", call. = FALSE)
+          }
+          if(i==1) message("ANCOM-BC2 statistics")
+
+          counts_sub <- abund_org[index, colnames(abund3), drop = FALSE]
+          samp_sub <- samp2[index, , drop = FALSE]
+
+          ps_sub <- phyloseq::phyloseq(
+            phyloseq::otu_table(as.matrix(t(counts_sub)), taxa_are_rows = TRUE),
+            phyloseq::sample_data(samp_sub)
+          )
+
+          capture.output({
+            ancom_out <- ANCOMBC::ancombc2(
+              data = ps_sub,
+              fix_formula = predictor,
+              p_adj_method = p_adjust_method,
+              prv_cut = 0,
+              lib_cut = 0,
+              verbose = FALSE
+            )
+          }, file = nullfile())
+
+          res_df <- ancom_out$res
+          p_col <- grep(paste0("^p_", predictor), colnames(res_df), value = TRUE)
+          if(length(p_col) == 0) p_col <- grep("^p_", colnames(res_df), value = TRUE)[2]
+
+          pval_tmp <- data.frame(
+            variable = as.character(res_df$taxon),
+            pval = as.numeric(res_df[[p_col]]),
+            stringsAsFactors = FALSE
+          )
+        }
+
         pval_tmp <- pval_tmp %>%
           dplyr::mutate(wrap=unique(samp2$wrap)[[i]],p_adjust=stats::p.adjust(pval, p_adjust_method))
         pval <- rbind(pval,pval_tmp)
       }
     }
     if(p_adjust) message(paste(p_adjust_method,"correction applied for",length(unique(pval$variable)),"taxa"))
+  }
+
+  if(volcano_plot == TRUE) {
+    vol_df <- data.frame()
+    if(!is.null(facet_wrap)) {
+      samp2 <- samp2[!is.na(samp2[[facet_wrap]]) & samp2[[facet_wrap]] != "NA", , drop = FALSE]
+      samp2[[facet_wrap]] <- droplevels(factor(samp2[[facet_wrap]]))
+      v_wrap_vec <- as.character(samp2[[facet_wrap]])
+      wrap_levels <- levels(samp2[[facet_wrap]])
+    } else {
+      v_wrap_vec <- rep("All", nrow(samp2))
+      wrap_levels <- "All"
+    }
+
+    for(i in 1:length(wrap_levels)) {
+      w <- wrap_levels[[i]]
+      if(is.na(w) || w == "NA" || w == "Mixed") next
+
+      index_wrap <- v_wrap_vec == w
+      samp_sub <- samp2[index_wrap, , drop = FALSE]
+
+      pval_sub <- if(stats == "mixed" && !is.null(facet_wrap)) pval else {
+        if(!is.null(facet_wrap)) pval[pval$wrap == w, ] else pval
+      }
+      if (nrow(pval_sub) == 0) next
+
+      facet_taxa_names <- as.character(pval_sub$variable)
+      abund_sub <- abund2[index_wrap, facet_taxa_names, drop = FALSE]
+
+      pred_factor <- factor(samp_sub[, predictor])
+      pred_levels <- levels(pred_factor)
+      if(length(pred_levels) != 2) {
+        stop(paste0("volcano_plot requires a binary predictor variable (exactly 2 groups). Error in group/facet: ", w))
+      }
+
+      g1_idx <- pred_factor == pred_levels[1]
+      g2_idx <- pred_factor == pred_levels[2]
+      pseudocount <- if(relative_abun) 1e-6 else 1
+
+      m1 <- colMeans(abund_sub[g1_idx, , drop = FALSE] + pseudocount, na.rm = TRUE)
+      m2 <- colMeans(abund_sub[g2_idx, , drop = FALSE] + pseudocount, na.rm = TRUE)
+      log2fc <- log2(m2 / m1)
+
+      p_vals_vec <- as.numeric(unlist(pval_sub$pval[match(colnames(abund_sub), pval_sub$variable)]))
+      padj_vals_vec <- as.numeric(unlist(pval_sub$p_adjust[match(colnames(abund_sub), pval_sub$variable)]))
+
+      sub_df <- data.frame(
+        Taxa = colnames(abund_sub),
+        log2FC = as.numeric(log2fc[colnames(abund_sub)]),
+        pval = p_vals_vec,
+        padj = padj_vals_vec,
+        wrap = as.character(w),
+        stringsAsFactors = FALSE
+      )
+      vol_df <- rbind(vol_df, sub_df)
+    }
+
+    vol_df <- vol_df[!is.na(vol_df$wrap) & vol_df$wrap != "NA" & vol_df$wrap != "Mixed", , drop = FALSE]
+
+    if(!is.null(facet_wrap)) {
+      vol_df$wrap <- factor(vol_df$wrap, levels = wrap_levels)
+      vol_df$wrap <- droplevels(vol_df$wrap)
+    }
+    vol_df$Taxa_clean <- gsub("_", " ", vol_df$Taxa)
+    vol_df$negLogP <- -log10(vol_df$pval)
+
+    # Status classification
+    vol_df$Status <- "NS"
+    vol_df$Status[vol_df$pval < p_cutoff & vol_df$log2FC > 0] <- "Enriched"
+    vol_df$Status[vol_df$pval < p_cutoff & vol_df$log2FC < 0] <- "Depleted"
+
+    vol_df$Status <- factor(vol_df$Status, levels = c("Enriched", "Depleted", "NS"))
+
+    status_cols <- c("Enriched" = "#C0392B", "Depleted" = "#2980B9", "NS" = "#BDC3C7")
+
+    if (p_adjust) {
+      vol_df$alpha_val <- ifelse(vol_df$padj < adj_p_cutoff, 1.00,
+                                 ifelse(vol_df$pval < p_cutoff, 0.40, 0.35))
+    } else {
+      vol_df$alpha_val <- ifelse(vol_df$pval < p_cutoff, 1.00, 0.35)
+    }
+
+    adj_p_val <- NULL
+    filtering_active <- (min_abund > 0 || min_prev > 0)
+
+    if (p_adjust && (is.null(facet_wrap) || !filtering_active)) {
+      sig_adj_p_taxa <- vol_df[vol_df$padj <= adj_p_cutoff & !is.na(vol_df$padj), ]
+      if (nrow(sig_adj_p_taxa) > 0) {
+        adj_p_val <- max(sig_adj_p_taxa$pval, na.rm = TRUE)
+      } else {
+        message(paste0("No taxa met adjusted p <= ", adj_p_cutoff, ". Omitting 'adjusted p' line."))
+      }
+    }
+
+    y_max <- max(vol_df$negLogP, na.rm = TRUE)
+    std_breaks <- pretty(c(0, y_max))
+
+    custom_breaks <- c(std_breaks, -log10(p_cutoff))
+    custom_labels <- c(as.character(std_breaks), paste0("p=", p_cutoff))
+
+    # Add adjusted p-value tick label ONLY when unfaceted OR when filtering is off
+    if (p_adjust && is.null(facet_wrap)) {
+      adj_label_prefix <- switch(
+        tolower(p_adjust_method),
+        "fdr" = "FDR",
+        "bh"  = "BH",
+        "by"  = "BY",
+        tools::toTitleCase(tolower(p_adjust_method))
+      )
+      custom_breaks <- c(custom_breaks, -log10(adj_p_val))
+      custom_labels <- c(custom_labels, paste0(adj_label_prefix, " p=", adj_p_cutoff))
+    }
+
+    p <- ggplot(vol_df, aes(x = log2FC, y = negLogP, color = Status)) +
+      geom_point(aes(alpha = alpha_val), size = 2.8) +
+      scale_color_manual(values = status_cols) +
+      scale_alpha_identity() +
+      geom_vline(xintercept = 0, linetype = "dotted", color = "black", linewidth = 0.5) +
+      geom_hline(yintercept = -log10(p_cutoff), linetype = "dotted", color = "black", linewidth = 0.5) +
+      theme_bw() +
+      theme(
+        panel.grid.major = element_line(color = "grey92"),
+        panel.grid.minor = element_blank(),
+        legend.key = element_blank(),
+        legend.position = "bottom",
+        legend.text = element_text(size = 11),
+        axis.title = element_text(size = 13),
+        axis.text = element_text(size = 11),
+        plot.title = element_text(hjust = 0.5, size = 15, face = "bold"),
+        strip.background = element_blank(),
+        strip.text = element_text(size = 12)
+      ) +
+      scale_y_continuous(breaks = custom_breaks, labels = custom_labels) +
+      xlab(xlabs) + ylab(expression(-log[10](p))) + ggtitle(main) +
+      guides(
+        color = guide_legend(title = NULL, override.aes = list(size = 4, alpha = 1))
+      )
+
+    if (p_adjust && is.null(facet_wrap)) {
+      p <- p + geom_hline(yintercept = -log10(adj_p_val), linetype = "dashed", color = "black", linewidth = 0.5)
+    }
+
+    if(!is.null(facet_wrap)) {
+      if(is.null(facet_label)) label_names <- levels(factor(samp[,facet_wrap]))
+      if(!is.null(facet_label)) label_names <- facet_label
+      if(facet_n==TRUE){
+        label_names_df <- samp2 %>%
+          dplyr::filter(!is.na(.data[[facet_wrap]]) & .data[[facet_wrap]] != "NA") %>%
+          dplyr::group_by(.data[[facet_wrap]]) %>%
+          dplyr::summarize(n = dplyr::n(), .groups = "drop") %>%
+          dplyr::mutate(pasted_label = paste0(.data[[facet_wrap]], ", n = ", n))
+        label_names <- as.character(label_names_df$pasted_label)
+        names(label_names) <- as.character(label_names_df[[facet_wrap]])
+      } else {
+        names(label_names) <- levels(factor(samp2[[facet_wrap]]))
+      }
+      if(stats=="mixed") {
+        label_names <- c(label_names, "Mixed" = "Mixed")
+      }
+      p <- p + facet_grid(~wrap, labeller = labeller(wrap=label_names),scales = "free") + theme(strip.background = element_blank())
+    }
+    if (label_taxa) {
+      sig_df <- data.frame()
+      for(w in wrap_levels) {
+        if(is.na(w) || w == "NA" || w == "" || w == "Mixed") next
+        sub_v <- vol_df[vol_df$wrap == w & !is.na(vol_df$wrap), ]
+        target_sig_df <- if(p_adjust) sub_v[sub_v$padj < adj_p_cutoff | sub_v$pval < p_cutoff,] else sub_v[sub_v$pval < p_cutoff,]
+        sub_sig <- target_sig_df %>%
+          dplyr::arrange(if(p_adjust) padj else pval) %>%
+          head(top_n_labels)
+        sig_df <- rbind(sig_df, sub_sig)
+      }
+
+      sig_df <- sig_df[!is.na(sig_df$wrap) & sig_df$wrap != "NA" & sig_df$wrap != "" & sig_df$wrap != "Mixed", , drop = FALSE]
+      if(!is.null(facet_wrap)) {
+        sig_df$wrap <- factor(sig_df$wrap, levels = wrap_levels)
+      }
+
+      if (nrow(sig_df) > 0) {
+        font_style <- if (italic_names && type %in% c("genus", "family", "species")) "italic" else "plain"
+
+        if (requireNamespace("ggrepel", quietly = TRUE)) {
+          p <- p + ggrepel::geom_text_repel(
+            data = sig_df,
+            aes(label = Taxa_clean),
+            color = "black",
+            size = 3.5,
+            fontface = font_style,
+            show.legend = FALSE,
+            segment.color = "grey30",
+            segment.size = 0.4,
+            max.overlaps = 30,
+            box.padding = 0.4
+          )
+        } else {
+          p <- p + geom_text(
+            data = sig_df,
+            aes(label = Taxa_clean),
+            color = "black",
+            size = 3.5,
+            fontface = font_style,
+            vjust = -0.5,
+            show.legend = FALSE
+          )
+        }
+      }
+    }
+
+    if (no_legends) p <- p + theme(legend.position = "none")
+    if (stat_out) {
+      pval_out <<- vol_df
+    }
+    return(p)
   }
 
   bacteria <- rev(names(abund))
@@ -500,13 +846,9 @@ rabuplot <- function(phylo_ob,
 
   }
   if(bar_chart==TRUE){
-    molten_mean_1 <<- molten_mean
-    legend_names_1 <<- legend_names
-    cols_1 <<- cols
-    ordered_1 <<-ordered
     if(bar_chart_stacked==TRUE)
       if(!is.null(color_by)) cols <- rev(cols)
-      p <-  ggplot(molten_mean,aes(x=factor(predictor2,levels=legend_names,labels=legend_names),y=value, fill=variable)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = grid::unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
+    p <-  ggplot(molten_mean,aes(x=factor(predictor2,levels=legend_names,labels=legend_names),y=value, fill=variable)) + theme_bw()+geom_bar(stat="identity")+ theme_bw() + theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(),legend.key = element_blank(),axis.title=element_text(size=14),legend.text=element_text(size=12), axis.text = element_text(size = 12),strip.text = element_text(size = 12),legend.key.size = grid::unit(0.5, "cm"),text=element_text(size=12)) +xlab(NULL)+ylab(ylabs)+ggtitle(main) +  scale_fill_manual(values =cols,labels=ordered) + guides(fill = guide_legend(title=NULL))
     if(bar_chart_stacked==FALSE){
       if(!is.null(color_by)) p <-   ggplot(molten_mean,aes(x=variable,y=value, fill=colvar,group=wrap))+geom_bar(stat="identity", position = position_dodge(width = 0.95))+ scale_fill_manual(values =cols,labels=ordered2)+ guides(fill = guide_legend(title=color_by))
       else {
