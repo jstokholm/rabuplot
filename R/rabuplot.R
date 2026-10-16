@@ -152,6 +152,9 @@ rabuplot <- function(phylo_ob,
     p_val=FALSE
     if(bar_chart_stacked==FALSE & is.null(color_by)) no_legends = TRUE
   }
+  if (!is.null(Strata)) {
+    phylo_ob <- subset_samples(phylo_ob, get_variable(phylo_ob, Strata) == Strata_val)
+  }
   phylo_ob <- prune_samples(sample_sums(phylo_ob)>0,phylo_ob) #removes empty samples;
   otu_mat <- as(otu_table(phylo_ob), "matrix")
   if(taxa_are_rows(phylo_ob)) otu_mat <- t(otu_mat)
@@ -246,7 +249,6 @@ rabuplot <- function(phylo_ob,
     if(no_other_type==FALSE) abund[, paste("Other",type)] <- rowSums(abund_all[,!names(abund_all) %in% names(abund)])
   }
   index <- !is.na(rownames(samp))
-  if(!is.null(Strata)) index <- samp[,Strata]==Strata_val
   samp2 <- samp[index, , drop = FALSE]
   if(p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
     if(p_adjust_full ==TRUE | stats=="mgs_feature" | stats=="ancombc2" | volcano_plot==TRUE){
@@ -675,19 +677,12 @@ rabuplot <- function(phylo_ob,
   subset <- cbind(samp[!names(samp) %in% bacteria], abund) #fjerner evt eksisterende navne fra dataset og merger;
   subset$predictor2 <-  as.factor(subset[,predictor])
   subset$ID <- rownames(subset)
-  if(!is.null(Strata)) subset[,Strata] <- as.factor(subset[,Strata])
   if(!is.null(facet_wrap)){
     subset$wrap <-  as.factor(subset[,facet_wrap])
-    if(!is.null(Strata))
-      molten <-subset[, c("ID", paste(bacteria), "predictor2", Strata, "wrap")] %>% tidyr::pivot_longer(cols = -c(predictor2, ID, dplyr::all_of(Strata), wrap), names_to = "variable", values_to = "value")
-    else
-      molten <- subset[, c("ID", paste(bacteria), "predictor2", "wrap")] %>% tidyr::pivot_longer(cols = -c(ID, predictor2, wrap), names_to = "variable", values_to = "value")
+    molten <- subset[, c("ID", paste(bacteria), "predictor2", "wrap")] %>% tidyr::pivot_longer(cols = -c(ID, predictor2, wrap), names_to = "variable", values_to = "value")
   }
   if(is.null(facet_wrap)){
-    if(!is.null(Strata))
-      molten <- subset[, c("ID", bacteria, "predictor2", Strata)] %>% tidyr::pivot_longer(cols = -c(ID, predictor2, dplyr::all_of(Strata)), names_to = "variable", values_to = "value")
-    else
-      molten <- subset[, c("ID", bacteria, "predictor2")] %>% tidyr::pivot_longer(cols = -c(ID, predictor2), names_to = "variable", values_to = "value")
+    molten <- subset[, c("ID", bacteria, "predictor2")] %>% tidyr::pivot_longer(cols = -c(ID, predictor2), names_to = "variable", values_to = "value")
   }
   # Assign the color-grouping variable
   if (!is.null(color_by)) {
@@ -727,11 +722,6 @@ rabuplot <- function(phylo_ob,
   # Use the plotted variable itself when no alternative color grouping is supplied
   if (is.null(color_by)) {
     molten$colvar <- as.character(molten$variable)
-  }
-
-  # Filter by strata
-  if (!is.null(Strata)) {
-    molten <- molten[molten[[Strata]] == Strata_val, , drop = FALSE]
   }
 
   # Define the full default palette once
