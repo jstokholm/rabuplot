@@ -153,7 +153,13 @@ rabuplot <- function(phylo_ob,
     if(bar_chart_stacked==FALSE & is.null(color_by)) no_legends = TRUE
   }
   if (!is.null(Strata)) {
-    phylo_ob <- subset_samples(phylo_ob, get_variable(phylo_ob, Strata) == Strata_val)
+    strata_vals <- phyloseq::get_variable(phylo_ob, Strata)
+    keep_samples <- !is.na(strata_vals) & as.character(strata_vals) == as.character(Strata_val)
+
+    if (sum(keep_samples) == 0) {
+      stop(sprintf("[rabuplot Error]: No samples remaining after filtering by Strata '%s' == '%s'.", Strata, Strata_val))
+    }
+    phylo_ob <- phyloseq::prune_samples(keep_samples, phylo_ob)
   }
   phylo_ob <- prune_samples(sample_sums(phylo_ob)>0,phylo_ob) #removes empty samples;
   otu_mat <- as(otu_table(phylo_ob), "matrix")
