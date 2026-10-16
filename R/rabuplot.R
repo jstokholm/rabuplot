@@ -32,7 +32,7 @@
 #' @param stat_out Outputs a data.frame with statistics to Global environment; default is FALSE.
 #' @param p_val Displays p-values on plot; default is TRUE.
 #' @param p_stars Shows stars instead of p-values; default is FALSE.
-#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2", "ancombc2"; default is "non-parametric".
+#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2", "maaslin3", "ancombc2"; default is "non-parametric".
 #' @param p_adjust adjust p-values; default is "FALSE.
 #' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "bh", "by", "fdr"; default is "fdr".
 #' @param p_adjust_full correction applied for all taxa in the dataset; default is FALSE.
@@ -382,7 +382,35 @@ rabuplot <- function(phylo_ob,
           }, file = nullfile())
           pval_tmp <-    data.frame(variable=names(abund3),pval=fit_data[match(names(test_set),fit_data$feature),"pval"])
         }
+        if(stats=="maaslin3"){
+          if (!requireNamespace("maaslin3", quietly = TRUE)) {
+            stop("Package 'maaslin3' is required. Install via BiocManager::install('maaslin3') or remotes::install_github('cBioCenter/maaslin3').", call. = FALSE)
+          }
+          if(i==1) message("MaAsLin 3 statistics")
 
+          test_set <- setNames(abund3, paste0('X', seq_along(abund3)))
+          capture.output({fit_data <- maaslin3::maaslin3(
+            input_data = test_set,
+            input_metadata = data.frame(pred) %>% data.frame(row.names = rownames(test_set)),
+            output = tempdir(),
+            formula = "~ pred",
+            normalization = "NONE",
+            transform = "LOG",
+            min_abundance = 0.0,    # Disable internal MaAsLin filtering
+            min_prevalence = 0.0,
+            min_variance = 0.0,
+            warn_prevalence = FALSE,
+            plot_summary_plot = FALSE,
+            plot_associations = FALSE,
+            standardize = FALSE)$fit_data_abundance$results
+          }, file = nullfile())
+
+          pval_tmp <-    data.frame(variable=names(abund3),pval=fit_data[match(names(test_set),fit_data$feature),"pval_joint"])
+          cat(sprintf("Maaslin3: Using combined abundance + presence/absence model\n"))
+          cat(sprintf("Total input taxa: %d\n", ncol(test_set)))
+          cat(sprintf("Excluded taxa (zero variance / zero present): %d\n", ncol(test_set) - sum(!is.na(pval_tmp$pval))))
+          pval_tmp <- pval_tmp[!is.na(pval_tmp$pval),]
+        }
         if(stats=="ancombc2"){
           if (!requireNamespace("ANCOMBC", quietly = TRUE)) {
             stop("Package 'ANCOMBC' is required. Install via BiocManager::install('ANCOMBC').", call. = FALSE)
