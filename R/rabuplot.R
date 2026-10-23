@@ -32,7 +32,7 @@
 #' @param stat_out Outputs a data.frame with statistics to Global environment; default is FALSE.
 #' @param p_val Displays p-values on plot; default is TRUE.
 #' @param p_stars Shows stars instead of p-values; default is FALSE.
-#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2", "maaslin3", "ancombc2"; default is "non-parametric".
+#' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2", "maaslin3", "ancombc2", "deseq2"; default is "non-parametric".
 #' @param p_adjust adjust p-values; default is "FALSE.
 #' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "bh", "by", "fdr"; default is "fdr".
 #' @param p_adjust_full correction applied for all taxa in the dataset; default is FALSE.
@@ -257,9 +257,9 @@ rabuplot <- function(phylo_ob,
   index <- !is.na(rownames(samp))
   samp2 <- samp[index, , drop = FALSE]
   if(p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
-    if(p_adjust_full ==TRUE | stats=="mgs_feature" | stats=="ancombc2" | volcano_plot==TRUE){
+    if(p_adjust_full ==TRUE | stats=="mgs_feature" | stats=="ancombc2" | stats=="deseq2" | volcano_plot==TRUE){
       abund2 <- abund_org[index, , drop = FALSE]
-      if(relative_abun==TRUE & stats!="mgs_feature" & stats!="ancombc2") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
+      if(relative_abun==TRUE & stats!="mgs_feature" & stats!="ancombc2" & stats!="deseq2") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
     }
     else abund2 <- abund[index, , drop = FALSE]
 
@@ -271,33 +271,80 @@ rabuplot <- function(phylo_ob,
       stats="non-parametric"
       message("No id variable for mixed model, switching to non-parametric")
     }
-    if(stats=="mixed"){
+    if(stats == "mixed"){
+      if (!requireNamespace("lmerTest", quietly = TRUE)) {
+        stop("Package 'lmerTest' is required for mixed models. Install via install.packages('lmerTest').", call. = FALSE)
+      }
+      if (!id %in% colnames(samp2)) {
+        stop(sprintf("[rabuplot Error]: id variable '%s' not found in sample_data.", id), call. = FALSE)
+      }
       message("Mixed model statistics")
-      pred <- samp2[,predictor]
-      id <- samp2[,id]
-      if(!is.null(facet_wrap)) {
-        message(paste0("Using ",facet_wrap," as mixed model group variable"))
-        facet <- samp2[,"wrap"]
-        pval <- cbind(abund2,pred,id,facet) %>% as_tibble() %>%
-          tidyr::pivot_longer(cols = -c(pred, id, facet), names_to = "variable", values_to = "value") %>%
-          dplyr::group_by(variable) %>%
-          dplyr::summarize(pval = lmerTest::lmer(value ~ pred + factor(facet) + (1 | id)) %>% stats::anova %>% dplyr::filter(dplyr::row_number()==1) %>% .$'Pr(>F)', .groups = 'drop')
+
+      pred_vec <- samp2[, predictor]
+      id_vec   <- samp2[, id]
+
+      has_facet <- !is.null(facet_wrap)
+      if(has_facet) {
+        message(paste0("Using ", facet_wrap, " as mixed model group variable"))
+        facet_vec <- samp2[, "wrap"]
+      } else {
+        message("No group variable defined for mixed model in facet_wrap")
+        facet_vec <- NULL
       }
-      else {
-        message(paste0("No group variable defined for mixed model in facet_wrap"))
-        pval <- cbind(abund2,pred,id) %>% as_tibble() %>%
-          tidyr::pivot_longer(cols = -c(pred, id), names_to = "variable", values_to = "value") %>%
-          dplyr::group_by(variable) %>%
-          dplyr::summarize(pval = lmerTest::lmer(value ~ pred + (1 | id)) %>% stats::anova %>% .$'Pr(>F)', .groups = 'drop')
+
+      taxa_names <- colnames(abund2)
+      pvals <- rep(NA_real_, length(taxa_names))
+
+      for(j in seq_along(taxa_names)) {
+        y_val <- abund2[, j]
+
+        # Skip uninformative or zero-variance taxa
+        if(all(y_val == 0) || stats::var(y_val, na.rm = TRUE) == 0) {
+          next
+        }
+
+        df_fit <- data.frame(
+          y    = y_val,
+          pred = pred_vec,
+          id   = id_vec,
+          stringsAsFactors = FALSE
+        )
+        if(has_facet) df_fit$facet <- factor(facet_vec)
+
+        pvals[j] <- tryCatch({
+          if(has_facet) {
+            fit <- lmerTest::lmer(y ~ pred + facet + (1 | id), data = df_fit)
+          } else {
+            fit <- lmerTest::lmer(y ~ pred + (1 | id), data = df_fit)
+          }
+          anv <- as.data.frame(stats::anova(fit))
+          row_idx <- which(rownames(anv) == "pred")
+          if(length(row_idx) == 0) row_idx <- 1
+          as.numeric(anv[row_idx, "Pr(>F)"])
+        }, error = function(e) {
+          NA_real_
+        })
       }
-      pval <- pval %>%  dplyr::mutate(wrap="Mixed",p_adjust=stats::p.adjust(pval, p_adjust_method))
-      pval$wrap <- factor(pval$wrap,levels=c(levels(factor(samp2[,facet_wrap])),"Mixed"))
+
+      pval <- data.frame(
+        variable = taxa_names,
+        pval     = pvals,
+        stringsAsFactors = FALSE
+      )
+
+      pval <- pval %>%
+        dplyr::mutate(wrap = "Mixed", p_adjust = stats::p.adjust(pval, method = p_adjust_method))
+
+      if(has_facet) {
+        pval$wrap <- factor(pval$wrap, levels = c(levels(factor(samp2[, facet_wrap])), "Mixed"))
+      }
     }
     else {
       pval <- data.frame()
       for (i in 1:length(unique(samp2$wrap))){
-        index <- samp2$wrap==unique(samp2$wrap)[[i]]
-        abund3 <- abund2[index, , drop = FALSE]
+        index_wrap <- samp2$wrap == unique(samp2$wrap)[[i]]
+        abund3 <- abund2[index_wrap, , drop = FALSE]
+        pred   <- samp2[index_wrap, predictor]
 
         if (!is.null(facet_wrap) && (min_abund > 0 || min_prev > 0)) {
           n_facet_samples <- nrow(abund3)
@@ -322,7 +369,6 @@ rabuplot <- function(phylo_ob,
           next
         }
 
-        pred <- samp2[index,predictor]
         # test with featureModel
         if(stats=="mgs_feature"){
           if (!requireNamespace("metagenomeSeq", quietly = TRUE)) {
@@ -332,7 +378,8 @@ rabuplot <- function(phylo_ob,
               call. = FALSE
             )
           }
-          mgs <- metagenomeSeq::newMRexperiment(counts = t(abund3))
+          counts_sub <- abund_org[index_wrap, colnames(abund3), drop = FALSE]
+          mgs <- metagenomeSeq::newMRexperiment(counts = t(counts_sub))
           mgsp <- metagenomeSeq::cumNormStat(mgs)
           mgs <- metagenomeSeq::cumNorm(mgs, mgsp)
           mod <- stats::model.matrix(~as.numeric(pred == unique(pred)[1]))
@@ -428,8 +475,9 @@ rabuplot <- function(phylo_ob,
           }
           if(i==1) message("ANCOM-BC2 statistics")
 
-          counts_sub <- abund_org[index, colnames(abund3), drop = FALSE]
-          samp_sub <- samp2[index, , drop = FALSE]
+          counts_sub <- abund_org[index_wrap, colnames(abund3), drop = FALSE]
+          samp_sub   <- samp2[index_wrap, , drop = FALSE]
+          cts        <- t(counts_sub)
 
           ps_sub <- phyloseq::phyloseq(
             phyloseq::otu_table(as.matrix(t(counts_sub)), taxa_are_rows = TRUE),
@@ -457,7 +505,46 @@ rabuplot <- function(phylo_ob,
             stringsAsFactors = FALSE
           )
         }
+        # --- DESEQ2 ---
+        if(stats=="deseq2"){
+          if (!requireNamespace("DESeq2", quietly = TRUE)) {
+            stop("Package 'DESeq2' is required. Install via BiocManager::install('DESeq2').", call. = FALSE)
+          }
+          if(i==1) message("DESeq2 statistics")
 
+          counts_sub <- abund_org[index, colnames(abund3), drop = FALSE]
+          samp_sub <- samp2[index, , drop = FALSE]
+          cts <- t(counts_sub)
+
+          design_formula <- stats::as.formula(paste0("~ ", predictor))
+          dds <- DESeq2::DESeqDataSetFromMatrix(
+            countData = cts,
+            colData   = samp_sub,
+            design    = design_formula
+          )
+
+          # Run DESeq2 with poscounts size factor estimation (handles sparse microbiome data)
+          capture.output({
+            dds <- DESeq2::estimateSizeFactors(dds, type = "poscounts")
+            dds <- DESeq2::DESeq(dds, quiet = TRUE)
+            res <- DESeq2::results(dds, name = DESeq2::resultsNames(dds)[2])
+          }, file = nullfile())
+
+          res_df <- as.data.frame(res)
+          res_df$taxon <- rownames(res_df)
+
+          pval_tmp <- data.frame(
+            variable = names(abund3),
+            pval     = res_df[match(names(abund3), res_df$taxon), "pvalue"],
+            stringsAsFactors = FALSE
+          )
+
+          cat(sprintf("DESeq2: Using Negative Binomial Wald test (poscounts size factors)\n"))
+          cat(sprintf("Total input taxa: %d\n", ncol(counts_sub)))
+          cat(sprintf("Excluded taxa (zero variance / fitting error): %d\n", sum(is.na(pval_tmp$pval))))
+
+          pval_tmp <- pval_tmp[!is.na(pval_tmp$pval), ]
+        }
         pval_tmp <- pval_tmp %>%
           dplyr::mutate(wrap=unique(samp2$wrap)[[i]],p_adjust=stats::p.adjust(pval, p_adjust_method))
         pval <- rbind(pval,pval_tmp)
