@@ -4,6 +4,7 @@
 #'
 #' @param phylo_ob Phyloseq object with metadata in sample_data.
 #' @param predictor Predictor of interest for statistics/plotting in sample_data.
+#' @param covariates Character vector of covariate column names in sample_data to adjust for; default is NULL.
 #' @param type Taxonomic rank from tax_table, case insensitive; default is "genus".
 #' @param relative_abun Use relative abundances, else absolute; default is TRUE.
 #' @param min_abund Minimum relative abundance threshold (e.g., 0.001 for 0.1%); default is 0.
@@ -67,6 +68,7 @@
 
 rabuplot <- function(phylo_ob,
                      predictor="none",
+                     covariates=NULL,
                      type="genus",
                      relative_abun=TRUE,
                      min_abund=0,
@@ -157,18 +159,37 @@ rabuplot <- function(phylo_ob,
     keep_samples <- !is.na(strata_vals) & as.character(strata_vals) == as.character(Strata_val)
 
     if (sum(keep_samples) == 0) {
-      stop(sprintf("[rabuplot Error]: No samples remaining after filtering by Strata '%s' == '%s'.", Strata, Strata_val))
+      stop(sprintf("No samples remaining after filtering by Strata '%s' == '%s'.", Strata, Strata_val))
     }
     phylo_ob <- phyloseq::prune_samples(keep_samples, phylo_ob)
   }
   phylo_ob <- prune_samples(sample_sums(phylo_ob)>0,phylo_ob) #removes empty samples;
+
+  if (!is.null(covariates)) {
+    missing_covs <- setdiff(covariates, phyloseq::sample_variables(phylo_ob))
+    if (length(missing_covs) > 0) {
+      stop(sprintf("Covariates not found in sample_data: %s", paste(missing_covs, collapse = ", ")), call. = FALSE)
+    }
+  }
+
   otu_mat <- as(otu_table(phylo_ob), "matrix")
   if(taxa_are_rows(phylo_ob)) otu_mat <- t(otu_mat)
-  if(!is.null(facet_wrap)) index <- !is.na(get_variable(phylo_ob, predictor)) & !is.na(get_variable(phylo_ob, facet_wrap))
-  else   index <- !is.na(get_variable(phylo_ob, predictor))
-  if(length(unique(index)) !=1) message(paste(length(which(index==F)), "samples have been removed from full dataset (predictor/facet_wrap NAs)"))
-  otu_mat <- otu_mat[index,]
-  otu_mat  <- otu_mat[,colSums(otu_mat)>0] #removes empty OTUs;
+
+  if(!is.null(facet_wrap)) {
+    index <- !is.na(get_variable(phylo_ob, predictor)) & !is.na(get_variable(phylo_ob, facet_wrap)) & as.character(get_variable(phylo_ob, facet_wrap)) != "NA"
+  } else {
+    index <- !is.na(get_variable(phylo_ob, predictor))
+  }
+
+  if (!is.null(covariates)) {
+    cov_mat <- as.data.frame(phyloseq::get_variable(phylo_ob, covariates))
+    cov_na  <- apply(cov_mat, 1, function(row) any(is.na(row) | as.character(row) == "NA"))
+    index   <- index & !cov_na
+  }
+
+  if(length(unique(index)) != 1) message(paste(length(which(index==F)), "samples have been removed from full dataset (predictor/facet_wrap/covariate NAs)"))
+  otu_mat <- otu_mat[index, , drop = FALSE]
+  otu_mat  <- otu_mat[,colSums(otu_mat)>0, drop = FALSE]
   OTU_index <- colnames(otu_mat)
   tax <- as(tax_table(phylo_ob), "matrix") %>% data.frame(stringsAsFactors=FALSE)
   tax <- tax[rownames(tax) %in% OTU_index,,drop=FALSE]
@@ -219,7 +240,7 @@ rabuplot <- function(phylo_ob,
     n_removed <- n_taxa_before - n_taxa_after
 
     message(sprintf(
-      "[rabuplot]: Global filter applied (min_abund = %g, min_prev = %.1f%%). Removed %d / %d taxa (%d taxa remaining).",
+      "Global filter applied (min_abund = %g, min_prev = %.1f%%). Removed %d / %d taxa (%d taxa remaining).",
       min_abund,
       min_prev * 100,
       n_removed,
@@ -228,7 +249,7 @@ rabuplot <- function(phylo_ob,
     ))
 
     if (n_taxa_after == 0) {
-      stop("[rabuplot Error]: All taxa were removed by the specified `min_abund` and `min_prev` thresholds. Please relax your criteria.")
+      stop("All taxa were removed by the specified `min_abund` and `min_prev` thresholds. Please relax your criteria.")
     }
   }
 
@@ -276,7 +297,7 @@ rabuplot <- function(phylo_ob,
         stop("Package 'lmerTest' is required for mixed models. Install via install.packages('lmerTest').", call. = FALSE)
       }
       if (!id %in% colnames(samp2)) {
-        stop(sprintf("[rabuplot Error]: id variable '%s' not found in sample_data.", id), call. = FALSE)
+        stop(sprintf("id variable '%s' not found in sample_data.", id), call. = FALSE)
       }
       message("Mixed model statistics")
 
@@ -297,8 +318,6 @@ rabuplot <- function(phylo_ob,
 
       for(j in seq_along(taxa_names)) {
         y_val <- abund2[, j]
-
-        # Skip uninformative or zero-variance taxa
         if(all(y_val == 0) || stats::var(y_val, na.rm = TRUE) == 0) {
           next
         }
@@ -310,30 +329,22 @@ rabuplot <- function(phylo_ob,
           stringsAsFactors = FALSE
         )
         if(has_facet) df_fit$facet <- factor(facet_vec)
+        if(!is.null(covariates)) df_fit <- cbind(df_fit, samp2[, covariates, drop = FALSE])
+
+        fml_terms <- c("pred", if(has_facet) "facet", covariates)
+        fml <- stats::as.formula(paste("y ~", paste(fml_terms, collapse = " + "), "+ (1 | id)"))
 
         pvals[j] <- tryCatch({
-          if(has_facet) {
-            fit <- lmerTest::lmer(y ~ pred + facet + (1 | id), data = df_fit)
-          } else {
-            fit <- lmerTest::lmer(y ~ pred + (1 | id), data = df_fit)
-          }
+          fit <- lmerTest::lmer(fml, data = df_fit)
           anv <- as.data.frame(stats::anova(fit))
           row_idx <- which(rownames(anv) == "pred")
           if(length(row_idx) == 0) row_idx <- 1
           as.numeric(anv[row_idx, "Pr(>F)"])
-        }, error = function(e) {
-          NA_real_
-        })
+        }, error = function(e) NA_real_)
       }
 
-      pval <- data.frame(
-        variable = taxa_names,
-        pval     = pvals,
-        stringsAsFactors = FALSE
-      )
-
-      pval <- pval %>%
-        dplyr::mutate(wrap = "Mixed", p_adjust = stats::p.adjust(pval, method = p_adjust_method))
+      pval <- data.frame(variable = taxa_names, pval = pvals, stringsAsFactors = FALSE)
+      pval <- pval %>% dplyr::mutate(wrap = "Mixed", p_adjust = stats::p.adjust(pval, method = p_adjust_method))
 
       if(has_facet) {
         pval$wrap <- factor(pval$wrap, levels = c(levels(factor(samp2[, facet_wrap])), "Mixed"))
@@ -359,7 +370,7 @@ rabuplot <- function(phylo_ob,
           abund3 <- abund3[, keep_facet_taxa, drop = FALSE]
 
           message(sprintf(
-            "[rabuplot]: Facet '%s' filter (min_abund = %g, min_prev = %.1f%%): Kept %d / %d taxa.",
+            "Facet '%s' filter (min_abund = %g, min_prev = %.1f%%): Kept %d / %d taxa.",
             unique(samp2$wrap)[[i]], min_abund, min_prev * 100, ncol(abund3), n_taxa_before_facet
           ))
         }
@@ -369,7 +380,7 @@ rabuplot <- function(phylo_ob,
           next
         }
 
-        # test with featureModel
+        # --- METAGENOMESEQ (mgs_feature) ---
         if(stats=="mgs_feature"){
           if (!requireNamespace("metagenomeSeq", quietly = TRUE)) {
             stop(
@@ -385,6 +396,7 @@ rabuplot <- function(phylo_ob,
           mod <- stats::model.matrix(~as.numeric(pred == unique(pred)[1]))
           if(length(unique(samp2$wrap))>1) message(paste0("MGS FeatureModel for facet_wrap = ",unique(samp2$wrap)[[i]]))
           else message("MGS FeatureModel")
+          if (!is.null(covariates)) message("metagenomeSeq fitFeatureModel does not support covariate adjustment.")
           mgsfit <- metagenomeSeq::fitFeatureModel(obj=mgs,mod=mod)
           if (isS4(mgsfit)) {
             mgs_taxa <- slot(mgsfit, "taxa")
@@ -396,24 +408,45 @@ rabuplot <- function(phylo_ob,
             mgs_taxa <- rownames(abund3) # or colnames depending on orientation
             mgs_pvals <- metagenomeSeq::MRpvalues(mgsfit)
           }
-          pval_tmp <- data.frame(variable = mgs_taxa, pval = mgs_pvals)
+          pval_tmp <- data.frame(variable = mgs_taxa, pval = mgs_pvals, stringsAsFactors = FALSE)
 
         }
-        if(stats=="non-parametric"){   #Kruskal-Wallis
-          if(i==1) message("Non-parametric statistics")
-          pval_tmp <- cbind(abund3,pred) %>% as_tibble() %>%
-            tidyr::pivot_longer(cols = -pred, names_to = "variable", values_to = "value") %>%
-            dplyr::group_by(variable) %>%
-            dplyr::summarize(pval = stats::kruskal.test(value ~ pred)$p.value, .groups = 'drop')
+        # --- NON-PARAMETRIC ---
+        if(stats=="non-parametric"){
+          if(i==1) {
+            message("Non-parametric statistics")
+            if(!is.null(covariates)) {
+              message("Non-parametric test does not adjust for covariates.")
+            }
+          }
+          pval_tmp <- data.frame(
+            variable = colnames(abund3),
+            pval     = apply(abund3, 2, function(x) stats::kruskal.test(x ~ pred)$p.value),
+            stringsAsFactors = FALSE
+          )
         }
+        # --- PARAMETRIC ---
         if(stats=="parametric"){
           if(i==1) message("Parametric statistics")
-          pval_tmp <- cbind(abund3,pred) %>% as_tibble() %>%
-            tidyr::pivot_longer(cols = -pred, names_to = "variable", values_to = "value") %>%
-            dplyr::group_by(variable) %>%
-            dplyr::summarize(pval = stats::oneway.test(value ~ pred)$p.value, .groups = 'drop')
+          if (is.null(covariates)) {
+            pval_tmp <- data.frame(
+              variable = colnames(abund3),
+              pval     = apply(abund3, 2, function(x) stats::oneway.test(x ~ pred)$p.value),
+              stringsAsFactors = FALSE
+            )
+          } else {
+            cov_df <- samp2[index_wrap, covariates, drop = FALSE]
+            fml <- stats::as.formula(paste("y ~ pred +", paste(covariates, collapse = " + ")))
+            p_vec <- apply(abund3, 2, function(y) {
+              fit <- stats::lm(fml, data = cbind(data.frame(y = y, pred = pred), cov_df))
+              anv <- stats::anova(fit)
+              anv["pred", "Pr(>F)"]
+            })
+            pval_tmp <- data.frame(variable = colnames(abund3), pval = as.numeric(p_vec), stringsAsFactors = FALSE)
+          }
         }
-        if(stats=="maaslin2"){   #Maaslin2
+        # --- MAASLIN 2 ---
+        if(stats=="maaslin2"){
           if (!requireNamespace("Maaslin2", quietly = TRUE)) {
             stop(
               "Package 'Maaslin2' is required for this function. ",
@@ -423,9 +456,20 @@ rabuplot <- function(phylo_ob,
           }
           if(i==1) message("Maaslin2 statistics")
           test_set <- setNames(abund3, paste0('X', seq_along(abund3)))
+          rownames(test_set) <- rownames(abund3)
+
+          meta_df <- data.frame(
+            pred = pred,
+            samp2[index_wrap, covariates, drop = FALSE],
+            row.names = rownames(samp2)[index_wrap],
+            stringsAsFactors = FALSE
+          )
+
           capture.output({fit_data <- Maaslin2::Maaslin2(
-            test_set, data.frame(pred) %>% data.frame(row.names = rownames(test_set)), output = tempdir(),
-            fixed_effects = 'pred',
+            input_data = test_set,
+            input_metadata = meta_df,
+            output = tempdir(),
+            fixed_effects = c('pred', covariates),
             normalization = 'NONE',
             transform = "LOG",
             min_abundance = 0.0,
@@ -435,8 +479,10 @@ rabuplot <- function(phylo_ob,
             plot_heatmap = FALSE,
             standardize = FALSE)$results
           }, file = nullfile())
-          pval_tmp <-    data.frame(variable=names(abund3),pval=fit_data[match(names(test_set),fit_data$feature),"pval"])
+
+          pval_tmp <-    data.frame(variable=names(abund3),pval=fit_data[match(names(test_set),fit_data$feature),"pval"], stringsAsFactors = FALSE)
         }
+        # --- MAASLIN 3 ---
         if(stats=="maaslin3"){
           if (!requireNamespace("maaslin3", quietly = TRUE)) {
             stop("Package 'maaslin3' is required. Install via BiocManager::install('maaslin3') or remotes::install_github('cBioCenter/maaslin3').", call. = FALSE)
@@ -444,14 +490,25 @@ rabuplot <- function(phylo_ob,
           if(i==1) message("MaAsLin 3 statistics")
 
           test_set <- setNames(abund3, paste0('X', seq_along(abund3)))
+          rownames(test_set) <- rownames(abund3)
+
+          meta_df <- data.frame(
+            pred = pred,
+            samp2[index_wrap, covariates, drop = FALSE],
+            row.names = rownames(samp2)[index_wrap],
+            stringsAsFactors = FALSE
+          )
+
+          formula_str <- if (!is.null(covariates)) paste("~ pred +", paste(covariates, collapse = " + ")) else "~ pred"
+
           capture.output({fit_data <- maaslin3::maaslin3(
             input_data = test_set,
-            input_metadata = data.frame(pred) %>% data.frame(row.names = rownames(test_set)),
+            input_metadata = meta_df,
             output = tempdir(),
-            formula = "~ pred",
+            formula = formula_str,
             normalization = "NONE",
             transform = "LOG",
-            min_abundance = 0.0,    # Disable internal MaAsLin filtering
+            min_abundance = 0.0,
             min_prevalence = 0.0,
             min_variance = 0.0,
             warn_prevalence = FALSE,
@@ -466,6 +523,7 @@ rabuplot <- function(phylo_ob,
           cat(sprintf("Excluded taxa (zero variance / zero present): %d\n", ncol(test_set) - sum(!is.na(pval_tmp$pval))))
           pval_tmp <- pval_tmp[!is.na(pval_tmp$pval),]
         }
+        # --- ANCOM-BC2 ---
         if(stats=="ancombc2"){
           if (!requireNamespace("ANCOMBC", quietly = TRUE)) {
             stop("Package 'ANCOMBC' is required. Install via BiocManager::install('ANCOMBC').", call. = FALSE)
@@ -477,17 +535,18 @@ rabuplot <- function(phylo_ob,
 
           counts_sub <- abund_org[index_wrap, colnames(abund3), drop = FALSE]
           samp_sub   <- samp2[index_wrap, , drop = FALSE]
-          cts        <- t(counts_sub)
 
           ps_sub <- phyloseq::phyloseq(
             phyloseq::otu_table(as.matrix(t(counts_sub)), taxa_are_rows = TRUE),
             phyloseq::sample_data(samp_sub)
           )
 
+          formula_str <- if(!is.null(covariates)) paste(c(predictor, covariates), collapse = " + ") else predictor
+
           capture.output({
             ancom_out <- ANCOMBC::ancombc2(
               data = ps_sub,
-              fix_formula = predictor,
+              fix_formula = formula_str,
               p_adj_method = p_adjust_method,
               prv_cut = 0,
               lib_cut = 0,
@@ -497,13 +556,23 @@ rabuplot <- function(phylo_ob,
 
           res_df <- ancom_out$res
           p_col <- grep(paste0("^p_", predictor), colnames(res_df), value = TRUE)
-          if(length(p_col) == 0) p_col <- grep("^p_", colnames(res_df), value = TRUE)[2]
+          if(length(p_col) == 0) {
+            p_cols <- grep("^p_", colnames(res_df), value = TRUE)
+            p_cols <- setdiff(p_cols, "p_val")
+            p_col  <- p_cols[1]
+          }
 
           pval_tmp <- data.frame(
-            variable = as.character(res_df$taxon),
-            pval = as.numeric(res_df[[p_col]]),
+            variable = names(abund3),
+            pval     = res_df[match(names(abund3), res_df$taxon), p_col],
             stringsAsFactors = FALSE
           )
+
+          cat(sprintf("ANCOM-BC2: Using bias-corrected log-linear model\n"))
+          cat(sprintf("Total input taxa: %d\n", ncol(counts_sub)))
+          cat(sprintf("Excluded taxa (zero variance / fitting error): %d\n", sum(is.na(pval_tmp$pval))))
+
+          pval_tmp <- pval_tmp[!is.na(pval_tmp$pval), ]
         }
         # --- DESEQ2 ---
         if(stats=="deseq2"){
@@ -516,18 +585,20 @@ rabuplot <- function(phylo_ob,
           samp_sub <- samp2[index, , drop = FALSE]
           cts <- t(counts_sub)
 
-          design_formula <- stats::as.formula(paste0("~ ", predictor))
+          design_terms   <- if(!is.null(covariates)) c(covariates, predictor) else predictor
+          design_formula <- stats::as.formula(paste("~", paste(design_terms, collapse = " + ")))
+
           dds <- DESeq2::DESeqDataSetFromMatrix(
             countData = cts,
             colData   = samp_sub,
             design    = design_formula
           )
 
-          # Run DESeq2 with poscounts size factor estimation (handles sparse microbiome data)
           capture.output({
             dds <- DESeq2::estimateSizeFactors(dds, type = "poscounts")
             dds <- DESeq2::DESeq(dds, quiet = TRUE)
-            res <- DESeq2::results(dds, name = DESeq2::resultsNames(dds)[2])
+            res_name <- grep(paste0("^", predictor), DESeq2::resultsNames(dds), value = TRUE)[1]
+            res <- DESeq2::results(dds, name = res_name)
           }, file = nullfile())
 
           res_df <- as.data.frame(res)

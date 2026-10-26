@@ -7,6 +7,7 @@
 rabuplot(
   phylo_ob,
   predictor = "none",
+  covariates = NULL,
   type = "genus",
   relative_abun = TRUE,
   min_abund = 0,
@@ -68,6 +69,8 @@ rabuplot(
 \item{phylo_ob}{Phyloseq object with metadata in sample_data.}
 
 \item{predictor}{Predictor of interest for statistics/plotting in sample_data.}
+
+\item{covariates}{Character vector of covariate column names in sample_data to adjust for; default is NULL.}
 
 \item{type}{Taxonomic rank from tax_table, case insensitive; default is "genus".}
 
