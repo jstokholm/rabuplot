@@ -76,9 +76,9 @@ rabuplot(
 
 \item{relative_abun}{Use relative abundances, else absolute; default is TRUE.}
 
-\item{min_abund}{Minimum relative abundance threshold (e.g., 0.001 for 0.1%); default is 0.}
+\item{min_abund}{Minimum relative abundance threshold (e.g., 0.001 for 0.1\%); default is 0.}
 
-\item{min_prev}{Minimum prevalence fraction threshold (fraction of samples where taxon exceeds min_abund, e.g., 0.1 for 10% of samples); default is 0.}
+\item{min_prev}{Minimum prevalence fraction threshold (fraction of samples where taxon exceeds min_abund, e.g., 0.1 for 10\% of samples); default is 0.}
 
 \item{id}{Define id variable for mixed models.}
 
@@ -104,11 +104,11 @@ rabuplot(
 
 \item{Time}{Time variable name for longitudinal datasets.}
 
-\item{Timepoint}{Value in variable @Time to select.}
+\item{Timepoint}{Value in variable \code{Time} to select.}
 
-\item{Strata}{Name of variable for stratification;}
+\item{Strata}{Name of variable for stratification; default is NULL.}
 
-\item{Strata_val}{Value in variable @Strata to keep; default is 1.}
+\item{Strata_val}{Value in variable \code{Strata} to keep; default is 1.}
 
 \item{no_legends}{Removes legend; default is FALSE.}
 
@@ -130,7 +130,7 @@ rabuplot(
 
 \item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2", "maaslin3", "ancombc2", "deseq2"; default is "non-parametric".}
 
-\item{p_adjust}{adjust p-values; default is "FALSE.}
+\item{p_adjust}{adjust p-values; default is FALSE.}
 
 \item{p_adjust_method}{options: "holm", "hochberg", "hommel", "bonferroni", "bh", "by", "fdr"; default is "fdr".}
 
@@ -148,7 +148,7 @@ rabuplot(
 
 \item{select_taxa}{Choose all taxa from one or more taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.}
 
-\item{select_type}{Taxonomic rank of the @select_taxa; default is "genus".}
+\item{select_type}{Taxonomic rank of the \code{select_taxa}; default is "genus".}
 
 \item{bar_chart}{Choose to make bar chart; default is FALSE.}
 
@@ -164,13 +164,13 @@ rabuplot(
 
 \item{order_by}{Choose variable to order the selected taxa by; eg. Time; default is Time.}
 
-\item{order_val}{Choose value for @order_by; default is NULL.}
+\item{order_val}{Choose value for \code{order_by}; default is NULL.}
 
 \item{text_angle_x}{Choose value for rotation of axis-text; default is 0.}
 
 \item{rank}{Taxonomic rank from tax_table, replaces "type", case insensitive; default is "genus".}
 
-\item{select_rank}{Taxonomic rank of the @select_taxa, replaces "select_type"; default is "genus".}
+\item{select_rank}{Taxonomic rank of the \code{select_taxa}, replaces "select_type"; default is "genus".}
 
 \item{volcano_plot}{Produce volcano plot (log2FC vs -log10 P-value); default is FALSE.}
 

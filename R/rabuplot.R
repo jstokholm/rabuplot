@@ -7,8 +7,8 @@
 #' @param covariates Character vector of covariate column names in sample_data to adjust for; default is NULL.
 #' @param type Taxonomic rank from tax_table, case insensitive; default is "genus".
 #' @param relative_abun Use relative abundances, else absolute; default is TRUE.
-#' @param min_abund Minimum relative abundance threshold (e.g., 0.001 for 0.1%); default is 0.
-#' @param min_prev Minimum prevalence fraction threshold (fraction of samples where taxon exceeds min_abund, e.g., 0.1 for 10% of samples); default is 0.
+#' @param min_abund Minimum relative abundance threshold (e.g., 0.001 for 0.1\%); default is 0.
+#' @param min_prev Minimum prevalence fraction threshold (fraction of samples where taxon exceeds min_abund, e.g., 0.1 for 10\% of samples); default is 0.
 #' @param id Define id variable for mixed models.
 #' @param xlabs X-axis label
 #' @param ylabs Y-axis label
@@ -21,9 +21,9 @@
 #' @param no_other_type Taxa in lower abundances than top N_taxa, are grouped as "other", this will remove this group from the plot; default is FALSE.
 #' @param legend_names Define variable names for legend text.
 #' @param Time Time variable name for longitudinal datasets.
-#' @param Timepoint Value in variable @Time to select.
-#' @param Strata Name of variable for stratification;
-#' @param Strata_val Value in variable @Strata to keep; default is 1.
+#' @param Timepoint Value in variable \code{Time} to select.
+#' @param Strata Name of variable for stratification; default is NULL.
+#' @param Strata_val Value in variable \code{Strata} to keep; default is 1.
 #' @param no_legends Removes legend; default is FALSE.
 #' @param no_names Removes taxa names; default is FALSE.
 #' @param italic_names Taxa names will be in italic e.g. usable for family, genus, species levels; default is TRUE
@@ -34,7 +34,7 @@
 #' @param p_val Displays p-values on plot; default is TRUE.
 #' @param p_stars Shows stars instead of p-values; default is FALSE.
 #' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2", "maaslin3", "ancombc2", "deseq2"; default is "non-parametric".
-#' @param p_adjust adjust p-values; default is "FALSE.
+#' @param p_adjust adjust p-values; default is FALSE.
 #' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "bh", "by", "fdr"; default is "fdr".
 #' @param p_adjust_full correction applied for all taxa in the dataset; default is FALSE.
 #' @param colors define list of colors for plot. If not color brewer will be used; default is NULL.
@@ -43,7 +43,7 @@
 #' @param reverse Flip taxa order; default is FALSE.
 #' @param list_taxa A list of specific taxa names to be analyzed; default is NULL.
 #' @param select_taxa Choose all taxa from one or more taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.
-#' @param select_type Taxonomic rank of the @select_taxa; default is "genus".
+#' @param select_type Taxonomic rank of the \code{select_taxa}; default is "genus".
 #' @param bar_chart Choose to make bar chart; default is FALSE.
 #' @param bar_chart_stacked Produce stacked bar chart; default is FALSE
 #' @param percent Print percentages on bar chart; default is FALSE.
@@ -51,10 +51,10 @@
 #' @param facet_label Facet wrap labels; default is NULL.
 #' @param facet_n Show n for each facet; default is TRUE.
 #' @param order_by Choose variable to order the selected taxa by; eg. Time; default is Time.
-#' @param order_val Choose value for @order_by; default is NULL.
+#' @param order_val Choose value for \code{order_by}; default is NULL.
 #' @param text_angle_x Choose value for rotation of axis-text; default is 0.
 #' @param rank Taxonomic rank from tax_table, replaces "type", case insensitive; default is "genus".
-#' @param select_rank Taxonomic rank of the @select_taxa, replaces "select_type"; default is "genus".
+#' @param select_rank Taxonomic rank of the \code{select_taxa}, replaces "select_type"; default is "genus".
 #' @param volcano_plot Produce volcano plot (log2FC vs -log10 P-value); default is FALSE.
 #' @param p_cutoff P-value significance threshold cutoff line for volcano plot; default is 0.05.
 #' @param adj_p_cutoff q-value threshold cutoff line for volcano plot (used when p_adjust=TRUE); default is 0.05.
@@ -723,7 +723,7 @@ rabuplot <- function(phylo_ob,
     custom_labels <- c(as.character(std_breaks), paste0("p=", p_cutoff))
 
     # Add adjusted p-value tick label ONLY when unfaceted OR when filtering is off
-    if (p_adjust && is.null(facet_wrap)) {
+    if (p_adjust && is.null(facet_wrap) && !is.null(adj_p_val)) {
       adj_label_prefix <- switch(
         tolower(p_adjust_method),
         "fdr" = "FDR",
@@ -760,7 +760,7 @@ rabuplot <- function(phylo_ob,
         color = guide_legend(title = NULL, override.aes = list(size = 4, alpha = 1))
       )
 
-    if (p_adjust && is.null(facet_wrap)) {
+    if (p_adjust && is.null(facet_wrap) && !is.null(adj_p_val)) {
       p <- p + geom_hline(yintercept = -log10(adj_p_val), linetype = "dashed", color = "black", linewidth = 0.5)
     }
 
