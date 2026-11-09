@@ -697,14 +697,23 @@ rabuplot <- function(phylo_ob,
       is_pre_logged <- any(abund_sub < 0, na.rm = TRUE)
 
       if (is_pre_logged) {
+        # Already on log scale (e.g. metabolomics): simple difference of means
         m1 <- colMeans(abund_sub[g1_idx, , drop = FALSE], na.rm = TRUE)
         m2 <- colMeans(abund_sub[g2_idx, , drop = FALSE], na.rm = TRUE)
         log2fc <- m2 - m1
       } else {
-        pseudocount <- if(relative_abun) 1e-6 else 1
-        m1 <- colMeans(abund_sub[g1_idx, , drop = FALSE] + pseudocount, na.rm = TRUE)
-        m2 <- colMeans(abund_sub[g2_idx, , drop = FALSE] + pseudocount, na.rm = TRUE)
-        log2fc <- log2(m2 / m1)
+        # Universal geometric mean log2FC: log-transform BEFORE averaging.
+        # This properly aligns effect size with non-parametric rank tests and GLMs.
+        pseudocount <- if (relative_abun) {
+          nz <- abund_sub[abund_sub > 0]
+          if (length(nz) > 0) min(1e-4, min(nz, na.rm = TRUE) / 2) else 1e-5
+        } else {
+          1
+        }
+
+        m1 <- colMeans(log2(abund_sub[g1_idx, , drop = FALSE] + pseudocount), na.rm = TRUE)
+        m2 <- colMeans(log2(abund_sub[g2_idx, , drop = FALSE] + pseudocount), na.rm = TRUE)
+        log2fc <- m2 - m1
       }
 
       p_vals_vec <- as.numeric(unlist(pval_sub$pval[match(colnames(abund_sub), pval_sub$variable)]))
