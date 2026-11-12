@@ -950,7 +950,7 @@ rabuplot <- function(phylo_ob,
           sub_v[sub_v$pval < p_cutoff, ]
         }
         sub_sig <- target_sig_df %>%
-          dplyr::arrange(if(p_adjust) padj else pval) %>%
+          dplyr::arrange(if(p_adjust) padj else pval, dplyr::desc(abs(log2FC))) %>%
           head(top_n_labels)
         sig_df <- rbind(sig_df, sub_sig)
       }
@@ -973,8 +973,10 @@ rabuplot <- function(phylo_ob,
             show.legend = FALSE,
             segment.color = "grey30",
             segment.size = 0.4,
-            max.overlaps = 30,
-            box.padding = 0.4
+            min.segment.length = 0,
+            max.overlaps = Inf,
+            box.padding = 0.4,
+            seed = 42
           )
         } else {
           p <- p + geom_text(
