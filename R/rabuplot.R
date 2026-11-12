@@ -43,7 +43,7 @@
 #' @param reverse Flip taxa order; default is FALSE.
 #' @param list_taxa A list of specific taxa names to be analyzed; default is NULL.
 #' @param select_taxa Choose all taxa from one or more taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.
-#' @param select_type Taxonomic rank of the \code{select_taxa}; default is "genus".
+#' @param select_type Taxonomic rank of the \code{select_taxa}; defaults to \code{type} / \code{rank} if NULL.
 #' @param bar_chart Choose to make bar chart; default is FALSE.
 #' @param bar_chart_stacked Produce stacked bar chart; default is FALSE
 #' @param percent Print percentages on bar chart; default is FALSE.
@@ -54,7 +54,7 @@
 #' @param order_val Choose value for \code{order_by}; default is NULL.
 #' @param text_angle_x Choose value for rotation of axis-text; default is 0.
 #' @param rank Taxonomic rank from tax_table, replaces "type", case insensitive; default is "genus".
-#' @param select_rank Taxonomic rank of the \code{select_taxa}, replaces "select_type"; default is "genus".
+#' @param select_rank Taxonomic rank of the \code{select_taxa}, replaces "select_type".
 #' @param volcano_plot Produce volcano plot (log2FC vs -log10 P-value); default is FALSE.
 #' @param p_cutoff P-value significance threshold cutoff line for volcano plot; default is 0.05.
 #' @param adj_p_cutoff q-value threshold cutoff line for volcano plot (used when p_adjust=TRUE); default is 0.05.
@@ -107,7 +107,7 @@ rabuplot <- function(phylo_ob,
                      reverse=FALSE,
                      list_taxa=NULL,
                      select_taxa=NULL,
-                     select_type="genus",
+                     select_type=NULL,
                      bar_chart=FALSE,
                      bar_chart_stacked=FALSE,
                      facet_wrap=NULL,
@@ -137,6 +137,7 @@ rabuplot <- function(phylo_ob,
   if(is.null(N_taxa) & is.null(list_taxa)) N_taxa=15
   if(!is.null(rank)) type <- rank
   if(!is.null(select_rank)) select_type <- select_rank
+  if(is.null(select_type)) select_type <- type
   options(dplyr.summarize.inform = FALSE)
   if(volcano_plot == TRUE) {
     p_val = TRUE
@@ -273,6 +274,10 @@ rabuplot <- function(phylo_ob,
     for(i in 1:length(select_taxa)){
       list_taxa <- c(list_taxa,(as.character(unique(tax[grep(select_taxa[[i]],tax[,select_type],ignore.case=TRUE),type]))))
     }
+    list_taxa <- unique(list_taxa[!is.na(list_taxa) & list_taxa != ""])
+    if (length(list_taxa) == 0) {
+      stop(sprintf("None of the `select_taxa` matched any features in rank '%s'.", select_type), call. = FALSE)
+    }
   }
   if (!is.null(list_taxa)) {
     if (is.null(N_taxa)) N_taxa <- length(list_taxa)
@@ -280,7 +285,7 @@ rabuplot <- function(phylo_ob,
     unique_tax <- names(abund)
   }
 
-  if(length(abund)>1 && !volcano_plot){
+  if(length(abund)>1 && volcano_plot == FALSE){
     index <- !is.na(rownames(samp))
     if (!is.null(order_val))  index <- samp[,order_by] ==order_val
     abund <- abund[,order(-colSums(abund[index, , drop = FALSE], na.rm = TRUE))]
@@ -292,9 +297,9 @@ rabuplot <- function(phylo_ob,
   index <- !is.na(rownames(samp))
   samp2 <- samp[index, , drop = FALSE]
   if(p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
-    if(p_adjust_full ==TRUE | stats=="mgs_feature" | stats=="ancombc2" | stats=="deseq2" | volcano_plot==TRUE){
+    if(p_adjust_full == TRUE | stats %in% c("mgs_feature", "ancombc2", "deseq2") | volcano_plot == TRUE | (!is.null(list_taxa) & stats %in% c("maaslin2", "maaslin3"))){
       abund2 <- abund_org[index, , drop = FALSE]
-      if(relative_abun==TRUE & stats!="mgs_feature" & stats!="ancombc2" & stats!="deseq2") abund2 <- apply(abund2,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
+      if(relative_abun == TRUE & !stats %in% c("mgs_feature", "ancombc2", "deseq2")) abund2 <- apply(abund2, 1, function(x) x / sum(x)) %>% t %>% as.data.frame()
     }
     else abund2 <- abund[index, , drop = FALSE]
 
@@ -653,8 +658,22 @@ rabuplot <- function(phylo_ob,
         pval_tmp <- pval_tmp %>%
           dplyr::mutate(wrap=unique(samp2$wrap)[[i]],p_adjust=stats::p.adjust(pval, p_adjust_method))
         pval <- rbind(pval,pval_tmp)
+}
+    }
+
+    # Filter to selected/listed taxa AFTER full-community statistical modeling,
+    # and re-compute p_adjust on the selected subset unless p_adjust_full = TRUE
+    if (!is.null(list_taxa)) {
+      pval <- pval[pval$variable %in% list_taxa, , drop = FALSE]
+      if (!p_adjust_full && nrow(pval) > 0) {
+        pval <- pval %>%
+          dplyr::group_by(wrap) %>%
+          dplyr::mutate(p_adjust = stats::p.adjust(pval, method = p_adjust_method)) %>%
+          dplyr::ungroup() %>%
+          as.data.frame()
       }
     }
+
     if(p_adjust) message(paste(p_adjust_method,"correction applied for",length(unique(pval$variable)),"taxa"))
   }
 
@@ -738,6 +757,11 @@ rabuplot <- function(phylo_ob,
     }
     vol_df$Taxa_clean <- gsub("_", " ", vol_df$Taxa)
     vol_df$negLogP <- -log10(vol_df$pval)
+    vol_df <- vol_df[!is.na(vol_df$negLogP) & is.finite(vol_df$negLogP), , drop = FALSE]
+
+    if (nrow(vol_df) == 0) {
+      stop("[rabuplot Error]: No valid p-values available to plot in volcano_plot.", call. = FALSE)
+    }
 
     # Status classification
     vol_df$Status <- "NS"
@@ -746,16 +770,18 @@ rabuplot <- function(phylo_ob,
     vol_df$Status <- factor(vol_df$Status, levels = c("Enriched", "Depleted", "NS"))
 
     # Alpha transparency scaling
+    ns_alpha <- if (!is.null(list_taxa)) 0.85 else 0.25
     if (p_adjust) {
       vol_df$alpha_val <- ifelse(vol_df$padj < adj_p_cutoff, 1.00,
-                                 ifelse(vol_df$pval < p_cutoff, 0.45, 0.25))
+                                 ifelse(vol_df$pval < p_cutoff, 0.45, ns_alpha))
     } else {
-      vol_df$alpha_val <- ifelse(vol_df$pval < p_cutoff, 1.00, 0.25)
+      vol_df$alpha_val <- ifelse(vol_df$pval < p_cutoff, 1.00, ns_alpha)
     }
 
     # Color mapping: color_by vs. default Status
     use_color_by <- FALSE
-    status_cols  <- c("Enriched" = "#C0392B", "Depleted" = "#2980B9", "NS" = "#BDC3C7")
+    ns_hex       <- if (!is.null(list_taxa)) "#7F8C8D" else "#BDC3C7"
+    status_cols  <- c("Enriched" = "#C0392B", "Depleted" = "#2980B9", "NS" = ns_hex)
 
     if (!is.null(color_by)) {
       color_by_rank <- tolower(color_by)
@@ -916,7 +942,13 @@ rabuplot <- function(phylo_ob,
       for(w in wrap_levels) {
         if(is.na(w) || w == "NA" || w == "" || w == "Mixed") next
         sub_v <- vol_df[vol_df$wrap == w & !is.na(vol_df$wrap), ]
-        target_sig_df <- if(p_adjust) sub_v[sub_v$padj < adj_p_cutoff | sub_v$pval < p_cutoff,] else sub_v[sub_v$pval < p_cutoff,]
+        target_sig_df <- if (!is.null(list_taxa)) {
+          sub_v
+        } else if (p_adjust) {
+          sub_v[sub_v$padj < adj_p_cutoff | sub_v$pval < p_cutoff, ]
+        } else {
+          sub_v[sub_v$pval < p_cutoff, ]
+        }
         sub_sig <- target_sig_df %>%
           dplyr::arrange(if(p_adjust) padj else pval) %>%
           head(top_n_labels)

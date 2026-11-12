@@ -46,7 +46,7 @@ rabuplot(
   reverse = FALSE,
   list_taxa = NULL,
   select_taxa = NULL,
-  select_type = "genus",
+  select_type = NULL,
   bar_chart = FALSE,
   bar_chart_stacked = FALSE,
   facet_wrap = NULL,
@@ -148,7 +148,7 @@ rabuplot(
 
 \item{select_taxa}{Choose all taxa from one or more taxonomic variables, eg. "Staphylococcus" or "Staph" or "coccus" or c("staph",bifido"); default is NULL.}
 
-\item{select_type}{Taxonomic rank of the \code{select_taxa}; default is "genus".}
+\item{select_type}{Taxonomic rank of the \code{select_taxa}; defaults to \code{type} / \code{rank} if NULL.}
 
 \item{bar_chart}{Choose to make bar chart; default is FALSE.}
 
@@ -170,7 +170,7 @@ rabuplot(
 
 \item{rank}{Taxonomic rank from tax_table, replaces "type", case insensitive; default is "genus".}
 
-\item{select_rank}{Taxonomic rank of the \code{select_taxa}, replaces "select_type"; default is "genus".}
+\item{select_rank}{Taxonomic rank of the \code{select_taxa}, replaces "select_type".}
 
 \item{volcano_plot}{Produce volcano plot (log2FC vs -log10 P-value); default is FALSE.}
 
