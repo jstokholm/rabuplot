@@ -37,6 +37,7 @@
 #' @param p_adjust adjust p-values; default is FALSE.
 #' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "bh", "by", "fdr"; default is "fdr".
 #' @param p_adjust_full correction applied for all taxa in the dataset; default is FALSE.
+#' @param p_adjust_only show only adjusted p-values (hiding raw p-values) in both standard and volcano plots; default is FALSE.
 #' @param colors define list of colors for plot. If not color brewer will be used; default is NULL.
 #' @param color_by define taxonomic rank to color by; default is NULL.
 #' @param order Order by abundance, else alphabetically; default is TRUE.
@@ -101,6 +102,7 @@ rabuplot <- function(phylo_ob,
                      p_adjust=FALSE,
                      p_adjust_method="fdr",
                      p_adjust_full=FALSE,
+                     p_adjust_only=FALSE,
                      colors=NULL,
                      color_by=NULL,
                      order=TRUE,
@@ -135,6 +137,14 @@ rabuplot <- function(phylo_ob,
 
   if(!is.null(list_taxa) & is.null(N_taxa)) N_taxa = length(list_taxa)
   if(is.null(N_taxa) & is.null(list_taxa)) N_taxa=15
+  if (p_adjust_only) {
+    p_adjust <- TRUE
+    p_val <- TRUE
+  } else if (!p_val && p_adjust) {
+    p_adjust_only <- TRUE
+    p_val <- TRUE
+  }
+
   if(!is.null(rank)) type <- rank
   if(!is.null(select_rank)) select_type <- select_rank
   if(is.null(select_type)) select_type <- type
@@ -149,10 +159,12 @@ rabuplot <- function(phylo_ob,
   if(bar_chart_stacked==TRUE) {
     bar_chart=TRUE
     p_val=FALSE
+    p_adjust_only=FALSE
   }
   if(predictor=="none") {
     sample_data(phylo_ob)$none <- "All samples"
     p_val=FALSE
+    p_adjust_only=FALSE
     if(bar_chart_stacked==FALSE & is.null(color_by)) no_legends = TRUE
   }
   if (!is.null(Strata)) {
@@ -226,6 +238,16 @@ rabuplot <- function(phylo_ob,
     tax <- tax[rownames(tax) %in% OTU_index,]
     samp <- samp[rownames(samp) %in% index,]
   }
+  pred_non_na   <- samp[!is.na(samp[, predictor]), predictor]
+  is_continuous <- is.numeric(pred_non_na) && length(unique(pred_non_na)) > 2
+
+  if (is_continuous && !volcano_plot) {
+    stop("[rabuplot Error]: Continuous numeric predictors are only supported when `volcano_plot = TRUE`.", call. = FALSE)
+  }
+  if (is_continuous && xlabs == "log2FC") {
+    xlabs <- if (stats == "non-parametric") "Spearman's rho" else "Correlation (r)"
+  }
+
   taxa_vec <- as.character(tax[,type])
   unique_tax <- unique(taxa_vec)
 
@@ -442,25 +464,37 @@ rabuplot <- function(phylo_ob,
         # --- NON-PARAMETRIC ---
         if(stats=="non-parametric"){
           if(i==1) {
-            message("Non-parametric statistics")
+            message(if (is_continuous) "Non-parametric statistics (Spearman correlation)" else "Non-parametric statistics")
             if(!is.null(covariates)) {
               message("Non-parametric test does not adjust for covariates.")
             }
           }
           pval_tmp <- data.frame(
             variable = colnames(abund3),
-            pval     = apply(abund3, 2, function(x) stats::kruskal.test(x ~ pred)$p.value),
+            pval     = apply(abund3, 2, function(x) {
+              if (is_continuous) {
+                tryCatch(stats::cor.test(x, pred, method = "spearman", exact = FALSE)$p.value, error = function(e) NA_real_)
+              } else {
+                stats::kruskal.test(x ~ pred)$p.value
+              }
+            }),
             stringsAsFactors = FALSE
           )
         }
 
         # --- PARAMETRIC ---
         if(stats=="parametric"){
-          if(i==1) message("Parametric statistics")
+          if(i==1) message(if (is_continuous && is.null(covariates)) "Parametric statistics (Pearson correlation)" else "Parametric statistics")
           if (is.null(covariates)) {
             pval_tmp <- data.frame(
               variable = colnames(abund3),
-              pval     = apply(abund3, 2, function(x) stats::oneway.test(x ~ pred)$p.value),
+              pval     = apply(abund3, 2, function(x) {
+                if (is_continuous) {
+                  tryCatch(stats::cor.test(x, pred, method = "pearson")$p.value, error = function(e) NA_real_)
+                } else {
+                  stats::oneway.test(x ~ pred)$p.value
+                }
+              }),
               stringsAsFactors = FALSE
             )
           } else {
@@ -474,7 +508,6 @@ rabuplot <- function(phylo_ob,
             pval_tmp <- data.frame(variable = colnames(abund3), pval = as.numeric(p_vec), stringsAsFactors = FALSE)
           }
         }
-
         # --- MAASLIN 2 ---
         if(stats=="maaslin2"){
           if (!requireNamespace("Maaslin2", quietly = TRUE)) {
@@ -658,7 +691,7 @@ rabuplot <- function(phylo_ob,
         pval_tmp <- pval_tmp %>%
           dplyr::mutate(wrap=unique(samp2$wrap)[[i]],p_adjust=stats::p.adjust(pval, p_adjust_method))
         pval <- rbind(pval,pval_tmp)
-}
+      }
     }
 
     # Filter to selected/listed taxa AFTER full-community statistical modeling,
@@ -704,37 +737,64 @@ rabuplot <- function(phylo_ob,
       facet_taxa_names <- as.character(pval_sub$variable)
       abund_sub <- abund2[index_wrap, facet_taxa_names, drop = FALSE]
 
-      pred_factor <- factor(samp_sub[, predictor])
-      pred_levels <- levels(pred_factor)
-      if(length(pred_levels) != 2) {
-        stop(paste0("volcano_plot requires a binary predictor variable (exactly 2 groups). Error in group/facet: ", w))
-      }
-
-      g1_idx <- pred_factor == pred_levels[1]
-      g2_idx <- pred_factor == pred_levels[2]
-
-      is_pre_logged <- any(abund_sub < 0, na.rm = TRUE)
-
-      if (is_pre_logged) {
-        # Already on log scale (e.g. metabolomics): simple difference of means
-        m1 <- colMeans(abund_sub[g1_idx, , drop = FALSE], na.rm = TRUE)
-        m2 <- colMeans(abund_sub[g2_idx, , drop = FALSE], na.rm = TRUE)
-        log2fc <- m2 - m1
-      } else {
-        # Universal geometric mean log2FC: log-transform BEFORE averaging.
-        # This properly aligns effect size with non-parametric rank tests and GLMs.
-        pseudocount <- if (relative_abun) {
-          nz <- abund_sub[abund_sub > 0]
-          if (length(nz) > 0) min(1e-4, min(nz, na.rm = TRUE) / 2) else 1e-5
-        } else {
-          1
+      if (is_continuous) {
+        pred_num <- as.numeric(samp_sub[, predictor])
+        if (length(unique(pred_num[!is.na(pred_num)])) < 2) {
+          stop(paste0("volcano_plot requires at least 2 distinct values in continuous predictor. Error in group/facet: ", w))
         }
 
-        m1 <- colMeans(log2(abund_sub[g1_idx, , drop = FALSE] + pseudocount), na.rm = TRUE)
-        m2 <- colMeans(log2(abund_sub[g2_idx, , drop = FALSE] + pseudocount), na.rm = TRUE)
-        log2fc <- m2 - m1
-      }
+        if (stats == "non-parametric") {
+          cor_vec <- suppressWarnings(stats::cor(abund_sub, pred_num, use = "pairwise.complete.obs", method = "spearman"))
+        } else {
+          is_pre_logged <- any(abund_sub < 0, na.rm = TRUE)
+          if (is_pre_logged) {
+            abund_for_cor <- abund_sub
+          } else {
+            pseudocount <- if (relative_abun) {
+              nz <- abund_sub[abund_sub > 0]
+              if (length(nz) > 0) min(1e-4, min(nz, na.rm = TRUE) / 2) else 1e-5
+            } else {
+              1
+            }
+            abund_for_cor <- log2(abund_sub + pseudocount)
+          }
+          cor_vec <- suppressWarnings(stats::cor(abund_for_cor, pred_num, use = "pairwise.complete.obs", method = "pearson"))
+        }
+        log2fc <- as.numeric(cor_vec[, 1])
+        log2fc[is.na(log2fc)] <- 0
+        names(log2fc) <- colnames(abund_sub)
+      } else {
+        pred_factor <- factor(samp_sub[, predictor])
+        pred_levels <- levels(pred_factor)
+        if(length(pred_levels) != 2) {
+          stop(paste0("volcano_plot requires a binary or continuous numeric predictor variable. Error in group/facet: ", w))
+        }
 
+        g1_idx <- pred_factor == pred_levels[1]
+        g2_idx <- pred_factor == pred_levels[2]
+
+        is_pre_logged <- any(abund_sub < 0, na.rm = TRUE)
+
+        if (is_pre_logged) {
+          # Already on log scale (e.g. metabolomics): simple difference of means
+          m1 <- colMeans(abund_sub[g1_idx, , drop = FALSE], na.rm = TRUE)
+          m2 <- colMeans(abund_sub[g2_idx, , drop = FALSE], na.rm = TRUE)
+          log2fc <- m2 - m1
+        } else {
+          # Universal geometric mean log2FC: log-transform BEFORE averaging.
+          # This properly aligns effect size with non-parametric rank tests and GLMs.
+          pseudocount <- if (relative_abun) {
+            nz <- abund_sub[abund_sub > 0]
+            if (length(nz) > 0) min(1e-4, min(nz, na.rm = TRUE) / 2) else 1e-5
+          } else {
+            1
+          }
+
+          m1 <- colMeans(log2(abund_sub[g1_idx, , drop = FALSE] + pseudocount), na.rm = TRUE)
+          m2 <- colMeans(log2(abund_sub[g2_idx, , drop = FALSE] + pseudocount), na.rm = TRUE)
+          log2fc <- m2 - m1
+        }
+      }
       p_vals_vec <- as.numeric(unlist(pval_sub$pval[match(colnames(abund_sub), pval_sub$variable)]))
       padj_vals_vec <- as.numeric(unlist(pval_sub$p_adjust[match(colnames(abund_sub), pval_sub$variable)]))
 
@@ -756,33 +816,40 @@ rabuplot <- function(phylo_ob,
       vol_df$wrap <- droplevels(vol_df$wrap)
     }
     vol_df$Taxa_clean <- gsub("_", " ", vol_df$Taxa)
-    vol_df$negLogP <- -log10(vol_df$pval)
+    p_plot_vec <- if (p_adjust_only) vol_df$padj else vol_df$pval
+    vol_df$negLogP <- -log10(pmax(p_plot_vec, .Machine$double.xmin))
     vol_df <- vol_df[!is.na(vol_df$negLogP) & is.finite(vol_df$negLogP), , drop = FALSE]
 
     if (nrow(vol_df) == 0) {
-      stop("[rabuplot Error]: No valid p-values available to plot in volcano_plot.", call. = FALSE)
+      stop("[rabuplot Error]: No valid taxa with non-zero variance remained to plot in volcano_plot.", call. = FALSE)
     }
 
     # Status classification
-    vol_df$Status <- "NS"
-    vol_df$Status[vol_df$pval < p_cutoff & vol_df$log2FC > 0] <- "Enriched"
-    vol_df$Status[vol_df$pval < p_cutoff & vol_df$log2FC < 0] <- "Depleted"
-    vol_df$Status <- factor(vol_df$Status, levels = c("Enriched", "Depleted", "NS"))
+    pos_label <- if (is_continuous) "Positive" else "Enriched"
+    neg_label <- if (is_continuous) "Negative" else "Depleted"
 
-    # Alpha transparency scaling
+    sig_metric <- if (p_adjust_only) vol_df$padj else vol_df$pval
+    sig_thresh <- if (p_adjust_only) adj_p_cutoff else p_cutoff
+
+    vol_df$Status <- "NS"
+    vol_df$Status[sig_metric < sig_thresh & vol_df$log2FC > 0] <- pos_label
+    vol_df$Status[sig_metric < sig_thresh & vol_df$log2FC < 0] <- neg_label
+    vol_df$Status <- factor(vol_df$Status, levels = c(pos_label, neg_label, "NS"))
+
+    # Alpha transparency scaling (keep explicitly selected taxa visible even if NS)
     ns_alpha <- if (!is.null(list_taxa)) 0.85 else 0.25
-    if (p_adjust) {
+    if (p_adjust_only) {
+      vol_df$alpha_val <- ifelse(vol_df$padj < adj_p_cutoff, 1.00, ns_alpha)
+    } else if (p_adjust) {
       vol_df$alpha_val <- ifelse(vol_df$padj < adj_p_cutoff, 1.00,
                                  ifelse(vol_df$pval < p_cutoff, 0.45, ns_alpha))
     } else {
       vol_df$alpha_val <- ifelse(vol_df$pval < p_cutoff, 1.00, ns_alpha)
     }
-
     # Color mapping: color_by vs. default Status
     use_color_by <- FALSE
     ns_hex       <- if (!is.null(list_taxa)) "#7F8C8D" else "#BDC3C7"
-    status_cols  <- c("Enriched" = "#C0392B", "Depleted" = "#2980B9", "NS" = ns_hex)
-
+    status_cols  <- stats::setNames(c("#C0392B", "#2980B9", ns_hex), c(pos_label, neg_label, "NS"))
     if (!is.null(color_by)) {
       color_by_rank <- tolower(color_by)
       if (color_by_rank %in% names(tax)) {
@@ -833,10 +900,18 @@ rabuplot <- function(phylo_ob,
     color_var        <- if (use_color_by) "colvar" else "Status"
     legend_title_vol <- if (use_color_by) tools::toTitleCase(color_by) else NULL
 
+    adj_label_prefix <- switch(
+      tolower(p_adjust_method),
+      "fdr" = "FDR",
+      "bh"  = "BH",
+      "by"  = "BY",
+      tools::toTitleCase(tolower(p_adjust_method))
+    )
+
     adj_p_val <- NULL
     filtering_active <- (min_abund > 0 || min_prev > 0)
 
-    if (p_adjust && (is.null(facet_wrap) || !filtering_active)) {
+    if (!p_adjust_only && p_adjust && (is.null(facet_wrap) || !filtering_active)) {
       sig_adj_p_taxa <- vol_df[vol_df$padj <= adj_p_cutoff & !is.na(vol_df$padj), ]
       if (nrow(sig_adj_p_taxa) > 0) {
         adj_p_val <- max(sig_adj_p_taxa$pval, na.rm = TRUE)
@@ -846,8 +921,9 @@ rabuplot <- function(phylo_ob,
     }
 
     # 1. Expand y-ceiling to give top points and ggrepel labels breathing room
+    active_cut <- if (p_adjust_only) adj_p_cutoff else p_cutoff
     y_max  <- max(vol_df$negLogP, na.rm = TRUE)
-    y_ceil <- max(y_max * 1.07, -log10(p_cutoff) + 0.5)
+    y_ceil <- max(y_max * 1.07, -log10(active_cut) + 0.5)
 
     # 2. Generate standard evenly spaced breaks up to the tighter ceiling
     std_breaks <- pretty(c(0, y_ceil))
@@ -860,23 +936,22 @@ rabuplot <- function(phylo_ob,
       stringsAsFactors = FALSE
     )
 
-    # Add p_cutoff tick mark and drop any standard break that collides with it (< 0.5 distance)
-    p_cut_val <- -log10(p_cutoff)
-    break_df  <- break_df[abs(break_df$brk - p_cut_val) > 0.5, , drop = FALSE]
-    break_df  <- rbind(break_df, data.frame(brk = p_cut_val, lbl = paste0("p=", p_cutoff)))
+    if (p_adjust_only) {
+      adj_cut_val <- -log10(adj_p_cutoff)
+      break_df    <- break_df[abs(break_df$brk - adj_cut_val) > 0.5, , drop = FALSE]
+      break_df    <- rbind(break_df, data.frame(brk = adj_cut_val, lbl = paste0(adj_label_prefix, " p=", adj_p_cutoff)))
+    } else {
+      # Add p_cutoff tick mark and drop any standard break that collides with it (< 0.5 distance)
+      p_cut_val <- -log10(p_cutoff)
+      break_df  <- break_df[abs(break_df$brk - p_cut_val) > 0.5, , drop = FALSE]
+      break_df  <- rbind(break_df, data.frame(brk = p_cut_val, lbl = paste0("p=", p_cutoff)))
 
-    # Add adjusted p-value tick mark if available
-    if (p_adjust && is.null(facet_wrap) && !is.null(adj_p_val)) {
-      adj_p_val_num <- -log10(adj_p_val)
-      adj_label_prefix <- switch(
-        tolower(p_adjust_method),
-        "fdr" = "FDR",
-        "bh"  = "BH",
-        "by"  = "BY",
-        tools::toTitleCase(tolower(p_adjust_method))
-      )
-      break_df <- break_df[abs(break_df$brk - adj_p_val_num) > 0.5, , drop = FALSE]
-      break_df <- rbind(break_df, data.frame(brk = adj_p_val_num, lbl = paste0(adj_label_prefix, " p=", adj_p_cutoff)))
+      # Add adjusted p-value tick mark if available
+      if (p_adjust && is.null(facet_wrap) && !is.null(adj_p_val)) {
+        adj_p_val_num <- -log10(adj_p_val)
+        break_df <- break_df[abs(break_df$brk - adj_p_val_num) > 0.5, , drop = FALSE]
+        break_df <- rbind(break_df, data.frame(brk = adj_p_val_num, lbl = paste0(adj_label_prefix, " p=", adj_p_cutoff)))
+      }
     }
 
     # 4. Sort breaks and labels monotonically
@@ -884,12 +959,25 @@ rabuplot <- function(phylo_ob,
     custom_breaks <- break_df$brk
     custom_labels <- break_df$lbl
 
+    vol_ylab <- if (ylabs != "Average relative abundance") {
+      ylabs
+    } else if (p_adjust_only) {
+      expression(-log[10](p[adj]))
+    } else {
+      expression(-log[10](p))
+    }
+
     p <- ggplot(vol_df, aes(x = log2FC, y = negLogP, color = .data[[color_var]])) +
       geom_point(aes(alpha = alpha_val), size = 2.8) +
       scale_color_manual(values = active_cols, name = legend_title_vol) +
       scale_alpha_identity() +
       geom_vline(xintercept = 0, linetype = "dotted", color = "black", linewidth = 0.5) +
-      geom_hline(yintercept = -log10(p_cutoff), linetype = "dotted", color = "black", linewidth = 0.5) +
+      geom_hline(
+        yintercept = -log10(active_cut),
+        linetype = if (p_adjust_only) "dashed" else "dotted",
+        color = "black",
+        linewidth = 0.5
+      ) +
       theme_bw() +
       theme(
         panel.grid.major = element_line(color = "grey92"),
@@ -909,12 +997,12 @@ rabuplot <- function(phylo_ob,
         labels = custom_labels,
         expand = expansion(mult = c(0.01, 0.02))
       ) +
-      xlab(xlabs) + ylab(expression(-log[10](p))) + ggtitle(main) +
+      xlab(xlabs) + ylab(vol_ylab) + ggtitle(main) +
       guides(
         color = guide_legend(title = legend_title_vol, override.aes = list(size = 4, alpha = 1))
       )
 
-    if (p_adjust && is.null(facet_wrap) && !is.null(adj_p_val)) {
+    if (!p_adjust_only && p_adjust && is.null(facet_wrap) && !is.null(adj_p_val)) {
       p <- p + geom_hline(yintercept = -log10(adj_p_val), linetype = "dashed", color = "black", linewidth = 0.5)
     }
 
@@ -1155,9 +1243,10 @@ rabuplot <- function(phylo_ob,
     pval$pval <- ifelse(is.na(pval$pval),1,pval$pval)
     pval$p_adjust <- ifelse(is.na(pval$p_adjust),1,pval$p_adjust)
     if(Only_sig){
-      index <- pval[pval$pval<0.05,"variable"]
-      molten <- molten[molten$variable %in% index,]
-      pval <- pval[pval$pval<0.05,]
+      sig_col <- if (p_adjust_only) "p_adjust" else "pval"
+      index <- pval[pval[[sig_col]] < 0.05, "variable"]
+      molten <- molten[molten$variable %in% index, ]
+      pval <- pval[pval[[sig_col]] < 0.05, ]
     }
 
     if(stat_out){
@@ -1244,15 +1333,16 @@ rabuplot <- function(phylo_ob,
       if(log_max == 1)  p <- p+ scale_y_log10(limits=c(0.001,0.013),breaks=c(.001,.01),labels=c("0%","1%"))
     }
     if(p_val==TRUE){
-      if(p_adjust){
+      if(p_adjust && !p_adjust_only){
         if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1,7,70),labels=c("0%","0.1%","1%","10%","100%", "P-value", "q-value"))
         if(log_max == 10)  p <- p+ scale_y_log10(breaks=c(.001,.01,.05,0.1,0.126,1.26),labels=c("0%","1%","5%","10%", "P-value", "q-value"))
         if(log_max == 1)  p <- p+ scale_y_log10(breaks=c(.001,.01,0.0126,0.126),labels=c("0%","1%", "P-value", "q-value"))
       }
       else{
-        if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1,7),labels=c("0%","0.1%","1%","10%","100%", "P-value"))
-        if(log_max == 10)  p <- p+ scale_y_log10(breaks=c(.001,.01,.05,0.10,0.126),labels=c("0%","1%","5%","10%", "P-value"))
-        if(log_max == 1)  p <- p+ scale_y_log10(breaks=c(.001,.01,0.0126),labels=c("0%","1%", "P-value"))
+        single_p_label <- if (p_adjust_only) "q-value" else "P-value"
+        if(log_max == 100)  p <- p+ scale_y_log10(breaks=c(.000001,.001,.01,.1,1,7),labels=c("0%","0.1%","1%","10%","100%", single_p_label))
+        if(log_max == 10)  p <- p+ scale_y_log10(breaks=c(.001,.01,.05,0.10,0.126),labels=c("0%","1%","5%","10%", single_p_label))
+        if(log_max == 1)  p <- p+ scale_y_log10(breaks=c(.001,.01,0.0126),labels=c("0%","1%", single_p_label))
       }
     }
   }
@@ -1260,17 +1350,18 @@ rabuplot <- function(phylo_ob,
   if(log==FALSE){
     if(p_val==FALSE) p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1),labels=c("0%","25%","50%","75%","100%"))
     if(p_val==TRUE){
-      if(p_adjust==TRUE) {
+      if(p_adjust==TRUE && !p_adjust_only) {
         if(max(molten_mean$value)<=1 & max(molten_mean$value)>=0.75) p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","25%","50%","75%","100%", "P-value", "q-value"))
         if(max(molten_mean$value)<0.75 & max(molten_mean$value)>=0.50) p <- p + scale_y_continuous(breaks=c(0,.25,.50,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","25%","50%", "P-value", "q-value"))
         if(max(molten_mean$value)<0.50 & max(molten_mean$value)>=0.25) p <- p + scale_y_continuous(breaks=c(0,.1,.2,.3,.4,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","10%","20%","30%","40%", "P-value", "q-value"))
         if(max(molten_mean$value)<0.25) p <- p + scale_y_continuous(breaks=c(0,.05,.1,.15,.2,max(molten_mean$value)*1.07,max(molten_mean$value)*1.25),labels=c("0%","5%","10%","15%","20%", "P-value", "q-value"))
       }
-      if(p_adjust==FALSE) {
-        if(max(molten_mean$value)<=1 & max(molten_mean$value)>=0.75)  p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,max(molten_mean$value)*1.07),labels=c("0%","25%","50%","75%","100%", "P-value"))
-        if(max(molten_mean$value)<0.75 & max(molten_mean$value)>=0.50) p <- p + scale_y_continuous(breaks=c(0,.25,.50,max(molten_mean$value)*1.07),labels=c("0%","25%","50%", "P-value"))
-        if(max(molten_mean$value)<0.50 & max(molten_mean$value)>=0.25) p <- p + scale_y_continuous(breaks=c(0,.1,.2,.3,.4,max(molten_mean$value)*1.07),labels=c("0%","10%","20%","30%","40%", "P-value"))
-        if(max(molten_mean$value)<0.25) p <- p + scale_y_continuous(breaks=c(0,.05,.1,.15,.2,max(molten_mean$value)*1.07),labels=c("0%","5%","10%","15%","20%", "P-value"))
+      else {
+        single_p_label <- if (p_adjust_only) "q-value" else "P-value"
+        if(max(molten_mean$value)<=1 & max(molten_mean$value)>=0.75)  p <- p + scale_y_continuous(breaks=c(0,.25,.50,.75,1,max(molten_mean$value)*1.07),labels=c("0%","25%","50%","75%","100%", single_p_label))
+        if(max(molten_mean$value)<0.75 & max(molten_mean$value)>=0.50) p <- p + scale_y_continuous(breaks=c(0,.25,.50,max(molten_mean$value)*1.07),labels=c("0%","25%","50%", single_p_label))
+        if(max(molten_mean$value)<0.50 & max(molten_mean$value)>=0.25) p <- p + scale_y_continuous(breaks=c(0,.1,.2,.3,.4,max(molten_mean$value)*1.07),labels=c("0%","10%","20%","30%","40%", single_p_label))
+        if(max(molten_mean$value)<0.25) p <- p + scale_y_continuous(breaks=c(0,.05,.1,.15,.2,max(molten_mean$value)*1.07),labels=c("0%","5%","10%","15%","20%", single_p_label))
       }
     }
   }
@@ -1283,14 +1374,25 @@ rabuplot <- function(phylo_ob,
   stars.pval <- function (p.value)
   {    unclass(stats::symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**",  "*", "NS")))
   }
-  if(p_stars==TRUE & p_val==TRUE) p <- p + geom_text(data=pval,aes(x=variable,y=y,label=paste(stars.pval(pval))) ,size=3,hjust=1)
+  if(p_stars==TRUE & p_val==TRUE) {
+    if (p_adjust_only) {
+      p <- p + geom_text(data=pval,aes(x=variable,y=y,label=paste(stars.pval(p_adjust))) ,size=3,hjust=1)
+    } else {
+      p <- p + geom_text(data=pval,aes(x=variable,y=y,label=paste(stars.pval(pval))) ,size=3,hjust=1)
+    }
+  }
 
   if(p_stars==FALSE & p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
-    p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval<0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
-    p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval>=0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
-    if(p_adjust){
-      p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust<0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
-      p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust>=0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
+    if (p_adjust_only) {
+      p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(p_adjust<0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
+      p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(p_adjust>=0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
+    } else {
+      p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval<0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
+      p <- p + geom_text(data=pval,aes(x=variable,y=y,label=ifelse(pval>=0.05, paste(format.pval(pval,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
+      if(p_adjust){
+        p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust<0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1,fontface="bold")
+        p <- p + geom_text(data=pval,aes(x=variable,y=y_adjust,label=ifelse(p_adjust>=0.05, paste(format.pval(p_adjust,1,0.001,nsmall=3)),"")) ,size=3,hjust=1)
+      }
     }
     if(stats=="mixed" & !is.null(facet_wrap)){
       if(bar_chart==FALSE) p <- p + expand_limits(y = 2)

@@ -40,6 +40,7 @@ rabuplot(
   p_adjust = FALSE,
   p_adjust_method = "fdr",
   p_adjust_full = FALSE,
+  p_adjust_only = FALSE,
   colors = NULL,
   color_by = NULL,
   order = TRUE,
@@ -135,6 +136,8 @@ rabuplot(
 \item{p_adjust_method}{options: "holm", "hochberg", "hommel", "bonferroni", "bh", "by", "fdr"; default is "fdr".}
 
 \item{p_adjust_full}{correction applied for all taxa in the dataset; default is FALSE.}
+
+\item{p_adjust_only}{show only adjusted p-values (hiding raw p-values) in both standard and volcano plots; default is FALSE.}
 
 \item{colors}{define list of colors for plot. If not color brewer will be used; default is NULL.}
 
