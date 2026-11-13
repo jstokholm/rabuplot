@@ -34,6 +34,7 @@
 #' @param p_val Displays p-values on plot; default is TRUE.
 #' @param p_stars Shows stars instead of p-values; default is FALSE.
 #' @param stats Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2", "maaslin3", "ancombc2", "deseq2"; default is "non-parametric".
+#' @param transform Pre-statistics abundance transformation; options: "none", "clr", "log", "log2", "log10", "asin_sqrt", "ast", "sqrt", "hellinger", "logit"; default is "none".
 #' @param p_adjust adjust p-values; default is FALSE.
 #' @param p_adjust_method options: "holm", "hochberg", "hommel", "bonferroni", "bh", "by", "fdr"; default is "fdr".
 #' @param p_adjust_full correction applied for all taxa in the dataset; default is FALSE.
@@ -99,6 +100,7 @@ rabuplot <- function(phylo_ob,
                      p_val = TRUE,
                      p_stars=FALSE,
                      stats="non-parametric",
+                     transform="none",
                      p_adjust=FALSE,
                      p_adjust_method="fdr",
                      p_adjust_full=FALSE,
@@ -134,7 +136,14 @@ rabuplot <- function(phylo_ob,
   if (!is.numeric(min_prev) || min_prev < 0 || min_prev > 1) {
     stop("`min_prev` must be a numeric value between 0 and 1.")
   }
-
+  transform <- tolower(trimws(transform))
+  valid_transforms <- c("none", "clr", "log", "log2", "log10", "asin_sqrt", "ast", "sqrt", "hellinger", "logit")
+  if (!transform %in% valid_transforms) {
+    stop(sprintf(
+      "`transform` must be one of: %s.",
+      paste(sprintf("'%s'", valid_transforms), collapse = ", ")
+    ), call. = FALSE)
+  }
   if(!is.null(list_taxa) & is.null(N_taxa)) N_taxa = length(list_taxa)
   if(is.null(N_taxa) & is.null(list_taxa)) N_taxa=15
   if (p_adjust_only) {
@@ -259,8 +268,15 @@ rabuplot <- function(phylo_ob,
     else   abund[,i] <- otu_mat[,taxa_vec== i]
   }
   abund_org <- abund
+  if (stats %in% c("deseq2", "mgs_feature")) {
+    if (any(abund_org < 0, na.rm = TRUE) || any(abund_org != floor(abund_org), na.rm = TRUE)) {
+      stop(sprintf(
+        "[rabuplot Error]: stats = '%s' requires raw integer count data in `otu_table(phylo_ob)`, but non-integer/relative values were detected. Use 'maaslin2', 'maaslin3', 'parametric', or 'non-parametric' instead.",
+        stats
+      ), call. = FALSE)
+    }
+  }
   if(relative_abun==TRUE) abund <- apply(abund,1,function(x) x/sum(x)) %>% t %>% as.data.frame()
-
   if (is.null(facet_wrap) && (min_abund > 0 || min_prev > 0)) {
     n_taxa_before <- ncol(abund)
     rel_matrix <- if (relative_abun) abund else apply(abund_org, 1, function(x) x / sum(x)) %>% t %>% as.data.frame()
@@ -316,14 +332,117 @@ rabuplot <- function(phylo_ob,
     if(N_taxa<length(unique_tax)) abund <- abund[-(length(unique_tax)-(length(unique_tax)-N_taxa)+1):-length(unique_tax)]
     if(no_other_type==FALSE) abund[, paste("Other",type)] <- rowSums(abund_all[,!names(abund_all) %in% names(abund), drop = FALSE], na.rm = TRUE)
   }
+  apply_pre_stat_transform <- function(mat, full_mat, method, is_rel) {
+    if (method == "none") return(mat)
+
+    if (method == "clr") {
+      # Compute CLR across the full community so sample geometric means are unskewed
+      rs_full <- rowSums(full_mat, na.rm = TRUE)
+      rs_full[rs_full == 0] <- 1
+      rel_full <- sweep(full_mat, 1, rs_full, "/")
+
+      nz <- rel_full[rel_full > 0]
+      eps <- if (any(rel_full == 0, na.rm = TRUE)) {
+        if (length(nz) > 0) min(1e-6, min(nz, na.rm = TRUE) / 2) else 1e-6
+      } else {
+        0
+      }
+
+      log_full <- log(rel_full + eps)
+      geo_mean_log <- rowMeans(log_full, na.rm = TRUE)
+      clr_full <- sweep(log_full, 1, geo_mean_log, "-")
+
+      out <- mat
+      shared_cols <- intersect(colnames(mat), colnames(clr_full))
+      out[, shared_cols] <- clr_full[rownames(mat), shared_cols, drop = FALSE]
+
+      # Handle synthetic "Other <type>" column if present
+      extra_cols <- setdiff(colnames(mat), colnames(clr_full))
+      if (length(extra_cols) > 0) {
+        rs_mat <- rowSums(mat, na.rm = TRUE)
+        rs_mat[rs_mat == 0] <- 1
+        rel_mat <- sweep(mat, 1, rs_mat, "/")
+        for (ec in extra_cols) {
+          out[, ec] <- log(rel_mat[, ec] + eps) - geo_mean_log
+        }
+      }
+      return(out)
+    }
+
+    if (method %in% c("asin_sqrt", "ast", "logit")) {
+      if (is_rel) {
+        rel_mat <- mat
+      } else {
+        rs_mat <- rowSums(mat, na.rm = TRUE)
+        rs_mat[rs_mat == 0] <- 1
+        rel_mat <- sweep(mat, 1, rs_mat, "/")
+      }
+      rel_mat <- pmin(pmax(as.matrix(rel_mat), 0), 1)
+      if (method %in% c("asin_sqrt", "ast")) {
+        return(as.data.frame(asin(sqrt(rel_mat))))
+      } else {
+        nz <- rel_mat[rel_mat > 0 & rel_mat < 1]
+        eps <- if (length(nz) > 0) min(1e-6, min(nz, na.rm = TRUE) / 2) else 1e-6
+        p_clamped <- pmin(pmax(rel_mat, eps), 1 - eps)
+        return(as.data.frame(log(p_clamped / (1 - p_clamped))))
+      }
+    }
+
+    if (method %in% c("sqrt", "hellinger")) {
+      return(as.data.frame(sqrt(pmax(as.matrix(mat), 0))))
+    }
+
+    # Log transformations ("log", "log2", "log10")
+    if (any(mat < 0, na.rm = TRUE)) {
+      warning("[rabuplot Warning]: Negative values detected in abundance matrix; skipping log transformation.", call. = FALSE)
+      return(mat)
+    }
+    nz <- mat[mat > 0]
+    eps <- if (any(mat == 0, na.rm = TRUE)) {
+      if (is_rel) {
+        if (length(nz) > 0) min(1e-6, min(nz, na.rm = TRUE) / 2) else 1e-6
+      } else {
+        1
+      }
+    } else {
+      0
+    }
+    if (method == "log10") {
+      return(as.data.frame(log10(as.matrix(mat) + eps)))
+    } else {
+      return(as.data.frame(log2(as.matrix(mat) + eps)))
+    }
+  }
+
   index <- !is.na(rownames(samp))
   samp2 <- samp[index, , drop = FALSE]
   if(p_val==TRUE & (bar_chart==FALSE | (bar_chart==TRUE & bar_chart_stacked==FALSE))){
     if(p_adjust_full == TRUE | stats %in% c("mgs_feature", "ancombc2", "deseq2") | volcano_plot == TRUE | (!is.null(list_taxa) & stats %in% c("maaslin2", "maaslin3"))){
       abund2 <- abund_org[index, , drop = FALSE]
-      if(relative_abun == TRUE & !stats %in% c("mgs_feature", "ancombc2", "deseq2")) abund2 <- apply(abund2, 1, function(x) x / sum(x)) %>% t %>% as.data.frame()
+      if(relative_abun == TRUE & !stats %in% c("mgs_feature", "ancombc2", "deseq2")) {
+        rs2 <- rowSums(abund2, na.rm = TRUE)
+        rs2[rs2 == 0] <- 1
+        abund2 <- sweep(abund2, 1, rs2, "/")
+      }
     }
     else abund2 <- abund[index, , drop = FALSE]
+
+    # Preserve untransformed abundances for volcano x-axis (log2FC / correlation)
+    abund_vol_base <- abund_org[index, , drop = FALSE]
+    if (relative_abun == TRUE) {
+      rs_vb <- rowSums(abund_vol_base, na.rm = TRUE)
+      rs_vb[rs_vb == 0] <- 1
+      abund_vol_base <- sweep(abund_vol_base, 1, rs_vb, "/")
+    }
+
+    if (transform != "none") {
+      if (stats %in% c("mgs_feature", "ancombc2", "deseq2")) {
+        message(sprintf("[rabuplot Notice]: stats = '%s' requires raw counts and applies its own internal normalization; ignoring transform = '%s'.", stats, transform))
+      } else {
+        message(sprintf("Pre-statistics transformation applied: %s", transform))
+        abund2 <- apply_pre_stat_transform(abund2, abund_org[index, , drop = FALSE], transform, relative_abun)
+      }
+    }
 
     if(stats=="mgs_feature" & length(levels(factor(samp2[,predictor])))>2){
       stats="non-parametric"
@@ -413,7 +532,11 @@ rabuplot <- function(phylo_ob,
           n_facet_samples <- nrow(abund3)
           n_taxa_before_facet <- ncol(abund3)
 
-          rel_facet_mat <- if(relative_abun) abund3 else apply(abund3, 1, function(x) x / sum(x)) %>% t %>% as.data.frame()
+          raw_facet_mat <- abund_org[index_wrap, colnames(abund3), drop = FALSE]
+          rs_facet <- rowSums(raw_facet_mat, na.rm = TRUE)
+          rs_facet[rs_facet == 0] <- 1
+          rel_facet_mat <- sweep(raw_facet_mat, 1, rs_facet, "/")
+
           facet_prev_frac <- colSums(rel_facet_mat > min_abund, na.rm = TRUE) / n_facet_samples
           keep_facet_taxa <- facet_prev_frac >= min_prev
 
@@ -528,14 +651,16 @@ rabuplot <- function(phylo_ob,
             stringsAsFactors = FALSE
           )
 
+          min_abun_thresh <- if (transform == "none") 0.0 else (min(test_set, na.rm = TRUE) - 1)
+
           capture.output({fit_data <- Maaslin2::Maaslin2(
             input_data = test_set,
             input_metadata = meta_df,
             output = tempdir(),
             fixed_effects = c('pred', covariates),
             normalization = 'NONE',
-            transform = "LOG",
-            min_abundance = 0.0,
+            transform = if (transform == "none") "LOG" else "NONE",
+            min_abundance = min_abun_thresh,
             min_prevalence = 0.0,
             min_variance = 0.0,
             plot_scatter = FALSE,
@@ -565,6 +690,7 @@ rabuplot <- function(phylo_ob,
           )
 
           formula_str <- if (!is.null(covariates)) paste("~ pred +", paste(covariates, collapse = " + ")) else "~ pred"
+          min_abun_thresh <- if (transform == "none") 0.0 else (min(test_set, na.rm = TRUE) - 1)
 
           capture.output({fit_data <- maaslin3::maaslin3(
             input_data = test_set,
@@ -572,10 +698,12 @@ rabuplot <- function(phylo_ob,
             output = tempdir(),
             formula = formula_str,
             normalization = "NONE",
-            transform = "LOG",
-            min_abundance = 0.0,
+            transform = if (transform == "none") "LOG" else "NONE",
+            min_abundance = min_abun_thresh,
             min_prevalence = 0.0,
             min_variance = 0.0,
+            zero_threshold = min_abun_thresh,
+            median_comparison_abundance = (transform != "clr" && ncol(test_set) >= 10),
             warn_prevalence = FALSE,
             plot_summary_plot = FALSE,
             plot_associations = FALSE,
@@ -735,7 +863,7 @@ rabuplot <- function(phylo_ob,
       if (nrow(pval_sub) == 0) next
 
       facet_taxa_names <- as.character(pval_sub$variable)
-      abund_sub <- abund2[index_wrap, facet_taxa_names, drop = FALSE]
+      abund_sub <- abund_vol_base[index_wrap, facet_taxa_names, drop = FALSE]
 
       if (is_continuous) {
         pred_num <- as.numeric(samp_sub[, predictor])

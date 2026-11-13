@@ -37,6 +37,7 @@ rabuplot(
   p_val = TRUE,
   p_stars = FALSE,
   stats = "non-parametric",
+  transform = "none",
   p_adjust = FALSE,
   p_adjust_method = "fdr",
   p_adjust_full = FALSE,
@@ -130,6 +131,8 @@ rabuplot(
 \item{p_stars}{Shows stars instead of p-values; default is FALSE.}
 
 \item{stats}{Select type of statistical test; options: "non-parametric", "parametric", "mixed", "mgs_feature", "maaslin2", "maaslin3", "ancombc2", "deseq2"; default is "non-parametric".}
+
+\item{transform}{Pre-statistics abundance transformation; options: "none", "clr", "log", "log2", "log10", "asin_sqrt", "ast", "sqrt", "hellinger", "logit"; default is "none".}
 
 \item{p_adjust}{adjust p-values; default is FALSE.}
 
